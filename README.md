@@ -43,10 +43,18 @@ Merges the hooks into `~/.claude/settings.json` (idempotent, backs up first) and
 ### On your Mac (surface)
 
 ```bash
+brew install terminal-notifier && brew install --cask swiftbar   # first time
 ./install-mac-watcher.sh <name>
 ```
 
-Installs a launchd agent (`com.ideaplaces.agent-inbox-watcher`) that polls the channel every 15s and raises native notifications (terminal-notifier if installed, else osascript). Log: `~/.agent-inbox/watcher.log`.
+Installs a launchd agent (`com.ideaplaces.agent-inbox-watcher`) that polls the channel every 15s and surfaces each message twice:
+
+- **Popup**: native notification via terminal-notifier (osascript fallback). Clicking it opens the `#agent-inbox-<name>` channel in the Discord app for full history/context.
+- **Sticky menubar inbox** (SwiftBar): a `🖐️2 ✅3` badge that stays until you hit "Mark all read" — go for coffee, come back, the menubar tells you who finished and who is blocked. Dropdown shows the recent items.
+
+Popups are macOS *banners* (they slide away) by default. If you also want the popups themselves to stay on screen: System Settings → Notifications → terminal-notifier → alert style **Alerts**.
+
+Log: `~/.agent-inbox/watcher.log`. Unread state: `~/.agent-inbox/unread.log`.
 
 Requires `jq`, `curl`, and a logged-in `az` on each machine at install time (secrets are cached locally after that).
 

@@ -56,3 +56,19 @@ launchctl unload "$PLIST" 2>/dev/null || true
 launchctl load "$PLIST"
 echo "Watcher installed and running (launchd: $LABEL, log: $CONF_DIR/watcher.log)"
 echo "New messages in #agent-inbox-$NAME now raise native macOS notifications."
+
+# Sticky menubar inbox via SwiftBar (brew install --cask swiftbar)
+if [ -d "/Applications/SwiftBar.app" ]; then
+  PLUGIN_DIR="$(defaults read com.ameba.SwiftBar PluginDirectory 2>/dev/null || true)"
+  if [ -z "$PLUGIN_DIR" ]; then
+    PLUGIN_DIR="$CONF_DIR/swiftbar"
+    defaults write com.ameba.SwiftBar PluginDirectory -string "$PLUGIN_DIR"
+  fi
+  mkdir -p "$PLUGIN_DIR"
+  chmod +x "$SCRIPT_DIR/swiftbar-plugin/agent-inbox.5s.sh"
+  ln -sf "$SCRIPT_DIR/swiftbar-plugin/agent-inbox.5s.sh" "$PLUGIN_DIR/agent-inbox.5s.sh"
+  open -a SwiftBar
+  echo "Menubar inbox installed (SwiftBar plugin: $PLUGIN_DIR/agent-inbox.5s.sh)"
+else
+  echo "Tip: brew install --cask swiftbar, then re-run for the sticky menubar inbox."
+fi
