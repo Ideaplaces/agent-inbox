@@ -1,44 +1,71 @@
 # Agent Inbox
 
-One place to see every Claude Code session that finished or needs you — across all machines (Mac, chipdev Ubuntu, anywhere else). Notifications land in the private Discord channel **#agent-inbox**, which reaches the Mac desktop, the phone, and keeps history like an inbox: come back after being away and scan what's waiting.
+Native Mac notifications for every Claude Code session that finishes or needs you — across all machines (Mac, chipdev Ubuntu, anywhere else), for every developer.
 
-## How it works
+Discord is only the **transport and history** (a private `#agent-inbox-<name>` channel per developer). The surface is a watcher on your Mac that polls that channel and raises **native macOS notifications**. You don't need the Discord client open — though the channel doubles as a catch-up inbox on the phone or after being away.
 
-Claude Code hooks on each machine call `notify.sh`, which posts a Discord embed via webhook:
+```
+senders (Claude Code hooks)          transport                 surface
+───────────────────────────   ──────────────────────   ─────────────────────────
+mac sessions      ─ notify.sh ─┐                       ┌─ watch-mac.sh (launchd)
+chipdev sessions  ─ notify.sh ─┼─→ #agent-inbox-<name> ─┤   → native macOS
+any other machine ─ notify.sh ─┘   (private, webhook)  └─   notifications
+```
+
+## What gets sent
 
 | Hook event | Meaning | Behavior |
 |------------|---------|----------|
 | `UserPromptSubmit` | You handed work to the agent | Records a start timestamp (no notification) |
-| `Stop` | Agent finished its turn | Posts **✅ Finished** with duration + last message snippet — only if the turn took ≥ `MIN_SECONDS` (default 45s), so quick back-and-forth doesn't spam |
-| `Notification` | Agent needs permission or is idle waiting for input | Posts **🖐️ Needs you** with the reason |
+| `Stop` | Agent finished its turn | **✅ Finished** with duration + last-message snippet — only if the turn took ≥ `MIN_SECONDS` (default 45s), so quick back-and-forth doesn't spam |
+| `Notification` | Agent needs permission or is idle waiting for input | **🖐️ Needs you** with the reason |
 
-Every message includes the repo name, host, working directory, and short session id, so with a dozen parallel sessions you always know who is talking.
+Every message carries repo name, host label, working directory, and short session id — with a dozen parallel sessions you always know who is talking.
 
-## Install (once per machine)
+## Setup
+
+### Once per developer (any machine with az)
 
 ```bash
-git clone git@github.com:Ideaplaces/agent-inbox.git   # or use the ideaplaces-meta checkout
-cd agent-inbox
-./install.sh
+./setup-user.sh <name> <discord-user-id>     # e.g. ./setup-user.sh luca 687429027862151186
 ```
 
-Requires `jq`, `curl`, and a logged-in `az` (the webhook URL is pulled once from Key Vault `kv-ideaplaces/discord-webhook-agent-inbox` and cached at `~/.agent-inbox/webhook-url`). The installer merges the hooks into `~/.claude/settings.json` idempotently and sends a test notification.
+Creates the private `#agent-inbox-<name>` channel, its webhook, and the Key Vault secret `discord-webhook-agent-inbox-<name>`. Uses the developer's bot (`discord-bot-token-<name>`, see `ideaplaces-devops/discord/README.md`).
+
+### On every machine where you run Claude Code (sender)
+
+```bash
+./install.sh <name>                          # e.g. ./install.sh chip
+```
+
+Merges the hooks into `~/.claude/settings.json` (idempotent, backs up first) and caches the webhook URL. Restart running Claude Code sessions to pick up the hooks.
+
+### On your Mac (surface)
+
+```bash
+./install-mac-watcher.sh <name>
+```
+
+Installs a launchd agent (`com.ideaplaces.agent-inbox-watcher`) that polls the channel every 15s and raises native notifications (terminal-notifier if installed, else osascript). Log: `~/.agent-inbox/watcher.log`.
+
+Requires `jq`, `curl`, and a logged-in `az` on each machine at install time (secrets are cached locally after that).
 
 ## Config
 
-Optional `~/.agent-inbox/config` (sourced by notify.sh):
+Optional `~/.agent-inbox/config` (sourced by both scripts):
 
 ```bash
-MIN_SECONDS=45          # ignore turns shorter than this
-HOST_LABEL="mac"        # override the hostname shown in messages
+MIN_SECONDS=45          # sender: ignore turns shorter than this
+HOST_LABEL="mac"        # sender: hostname shown in messages
+POLL_SECONDS=15         # watcher: Discord poll interval
 ```
 
 ## Infrastructure
 
-- Discord channel: `#agent-inbox` (id `1537606385318109294`, private to Chip) on the IdeaPlaces server
-- Webhook secret: Key Vault `kv-ideaplaces` → `discord-webhook-agent-inbox`
-- See `ideaplaces-devops/discord/README.md` for the server/bot conventions
+- Discord channels: `#agent-inbox-<name>`, private to that developer, on the IdeaPlaces server (chip: `1537606385318109294`)
+- Key Vault (`kv-ideaplaces`): `discord-webhook-agent-inbox-<name>` (webhook), `discord-bot-token-<name>` (watcher reads)
+- Conventions: `ideaplaces-devops/discord/README.md`
 
 ## Roadmap
 
-Phase 2 — a rich native Mac inbox client (actionable notifications, click-to-open VS Code window, read/unread state). Spec: https://docs.ideaplaces.com (ideaplaces-docs `docs/agent-inbox-spec.md`).
+Phase 2 — rich Mac inbox client (persistent list, read/unread, click-to-open the VS Code window). Spec: docs.ideaplaces.com → Active Projects → Agent Inbox.
