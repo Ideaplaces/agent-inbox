@@ -47,15 +47,19 @@ case "$KIND" in
     if [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ]; then
       SNIPPET="$(tail -n 200 "$TRANSCRIPT" | jq -rs '[.[] | select(.type=="assistant")] | last | .message.content | map(select(.type=="text") | .text) | join("\n")' 2>/dev/null | head -c 700)"
     fi
-    TITLE="✅ Finished — $REPO @ $HOST_LABEL"
+    if [ "$DURATION" = "unknown" ]; then
+      TITLE="✅ $REPO @ $HOST_LABEL"
+    else
+      TITLE="✅ $REPO @ $HOST_LABEL ($DURATION)"
+    fi
     COLOR=5763719
     BODY="$SNIPPET"
-    FOOTER="took $DURATION · session ${SESSION_ID:0:8} · $CWD"
+    FOOTER="session ${SESSION_ID:0:8} · $CWD"
     ;;
 
   notification)
     MESSAGE="$(printf '%s' "$INPUT" | jq -r '.message // "Waiting for input"')"
-    TITLE="🖐️ Needs you — $REPO @ $HOST_LABEL"
+    TITLE="🖐️ $REPO @ $HOST_LABEL"
     COLOR=16705372
     BODY="$MESSAGE"
     FOOTER="session ${SESSION_ID:0:8} · $CWD"

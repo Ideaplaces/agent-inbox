@@ -52,7 +52,8 @@ while true; do
       # API returns newest first; deliver oldest first.
       printf '%s' "$BATCH" | jq -c 'reverse | .[]' | while IFS= read -r MSG; do
         TITLE="$(printf '%s' "$MSG" | jq -r '.embeds[0].title // .content // "Agent Inbox"')"
-        BODY="$(printf '%s' "$MSG" | jq -r '(.embeds[0].description // "") + "\n" + (.embeds[0].footer.text // "")')"
+        # Description only — session id and path stay in the Discord history.
+        BODY="$(printf '%s' "$MSG" | jq -r '.embeds[0].description // ""')"
         notify "$TITLE" "$BODY"
       done
       printf '%s' "$BATCH" | jq -r '.[0].id' > "$CONF_DIR/last-id"
