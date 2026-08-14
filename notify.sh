@@ -45,7 +45,9 @@ case "$KIND" in
     fi
     SNIPPET=""
     if [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ]; then
-      SNIPPET="$(tail -n 200 "$TRANSCRIPT" | jq -rs '[.[] | select(.type=="assistant")] | last | .message.content | map(select(.type=="text") | .text) | join("\n")' 2>/dev/null | head -c 700)"
+      # Last non-empty assistant text. fromjson? tolerates the line tail may
+      # have truncated and skips tool-call-only entries.
+      SNIPPET="$(tail -n 300 "$TRANSCRIPT" | jq -Rrs '[split("\n")[] | fromjson? | select(.type=="assistant") | .message.content | if type=="array" then ([.[] | select(.type=="text") | .text] | join("\n")) else tostring end | select(length>0)] | last // ""' 2>/dev/null | head -c 700)"
     fi
     if [ "$DURATION" = "unknown" ]; then
       TITLE="✅ $REPO @ $HOST_LABEL"
