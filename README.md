@@ -2,6 +2,8 @@
 
 **Native Mac notifications for every Claude Code session that finishes or needs you — across all your machines.**
 
+<img src="docs/menubar-inbox.png" alt="Menubar badge showing 109 sessions waiting and 96 finished, with a dropdown listing each session by repo, host, and time" width="600">
+
 If you run several Claude Code sessions in parallel (some local, some over SSH on a dev box), the bottleneck isn't the agents — it's remembering who finished what and who is sitting blocked on a permission prompt. Agent Inbox flips that around: sessions interrupt *you*.
 
 - 🖐️ **"Needs you"** — an agent hit a permission prompt or is waiting for input
