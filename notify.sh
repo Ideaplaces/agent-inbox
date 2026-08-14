@@ -25,6 +25,28 @@ TRANSCRIPT="$(printf '%s' "$INPUT" | jq -r '.transcript_path // empty')"
 REPO="$(basename "${CWD:-unknown}")"
 NOW="$(date +%s)"
 
+# Last non-empty assistant text in the transcript. fromjson? tolerates the
+# line tail may have truncated and skips tool-call-only entries.
+last_assistant_text() { # $1 max chars
+  [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ] || return 0
+  tail -n 300 "$TRANSCRIPT" | jq -Rrs '[split("\n")[] | fromjson? | select(.type=="assistant") | .message.content | if type=="array" then ([.[] | select(.type=="text") | .text] | join("\n")) else tostring end | select(length>0)] | last // ""' 2>/dev/null | head -c "$1"
+}
+
+# What this chat is about: prefer Claude Code's own generated session summary
+# (the title shown in `claude --resume`), fall back to the first user prompt.
+session_task() { # $1 max chars
+  [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ] || return 0
+  local s
+  s="$(grep -m 5 '"type":"summary"' "$TRANSCRIPT" 2>/dev/null | tail -1 | jq -r '.summary // ""' 2>/dev/null)"
+  if [ -z "$s" ]; then
+    # First real user prompt; skip system wrappers (<local-command-caveat>,
+    # <command-name>, tool results) that also arrive as user entries.
+    s="$(head -n 100 "$TRANSCRIPT" | jq -Rrs '[split("\n")[] | fromjson? | select(.type=="user") | .message.content | if type=="array" then ([.[]? | objects | select(.type=="text") | .text] | join(" ")) else tostring end | gsub("^\\s+";"") | select(length>0) | select(startswith("<") | not)] | first // ""' 2>/dev/null)"
+  fi
+  # Strip terminal-paste artifacts (tool-result markers, selection markers).
+  printf '%s' "$s" | tr '\n' ' ' | sed 's/[⎿⧉].*//' | head -c "$1"
+}
+
 case "$KIND" in
   prompt)
     # Record when the user handed work to the agent; used to skip quick turns.
@@ -43,12 +65,10 @@ case "$KIND" in
     else
       DURATION="unknown"
     fi
-    SNIPPET=""
-    if [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ]; then
-      # Last non-empty assistant text. fromjson? tolerates the line tail may
-      # have truncated and skips tool-call-only entries.
-      SNIPPET="$(tail -n 300 "$TRANSCRIPT" | jq -Rrs '[split("\n")[] | fromjson? | select(.type=="assistant") | .message.content | if type=="array" then ([.[] | select(.type=="text") | .text] | join("\n")) else tostring end | select(length>0)] | last // ""' 2>/dev/null | head -c 700)"
-    fi
+    SNIPPET="$(last_assistant_text 600)"
+    TASK="$(session_task 150)"
+    [ -n "$TASK" ] && SNIPPET="🧵 $TASK
+$SNIPPET"
     if [ "$DURATION" = "unknown" ]; then
       TITLE="✅ $REPO @ $HOST_LABEL"
     else
@@ -63,7 +83,15 @@ case "$KIND" in
     MESSAGE="$(printf '%s' "$INPUT" | jq -r '.message // "Waiting for input"')"
     TITLE="🖐️ $REPO @ $HOST_LABEL"
     COLOR=16705372
-    BODY="$MESSAGE"
+    # Lead with what the chat is about, then what Claude is waiting on.
+    TASK="$(session_task 150)"
+    LAST="$(last_assistant_text 400)"
+    BODY=""
+    [ -n "$TASK" ] && BODY="🧵 $TASK
+"
+    BODY="$BODY$MESSAGE"
+    [ -n "$LAST" ] && BODY="$BODY
+❯ $LAST"
     FOOTER="session ${SESSION_ID:0:8} · $CWD"
     ;;
 
