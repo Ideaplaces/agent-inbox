@@ -19,8 +19,19 @@ GUILD=1462642831184232584
 TN=/opt/homebrew/bin/terminal-notifier
 TOKEN="$(cat "$CONF_DIR/bot-token" 2>/dev/null)"
 CHANNEL="$(cat "$CONF_DIR/channel-id" 2>/dev/null)"
-if [ -z "$TOKEN" ] || [ -z "$CHANNEL" ]; then
-  echo "watcher not configured: run install-mac-watcher.sh <name>" >&2
+NTFY_SERVER="${NTFY_SERVER:-https://ntfy.sh}"
+if [ -z "${NTFY_TOPIC:-}" ] && [ -s "$CONF_DIR/ntfy-topic" ]; then
+  NTFY_TOPIC="$(cat "$CONF_DIR/ntfy-topic")"
+fi
+
+if [ -n "$TOKEN" ] && [ -n "$CHANNEL" ]; then
+  MODE=discord
+  OPEN_URL="discord://-/channels/$GUILD/$CHANNEL"
+elif [ -n "${NTFY_TOPIC:-}" ]; then
+  MODE=ntfy
+  OPEN_URL="$NTFY_SERVER/$NTFY_TOPIC"
+else
+  echo "watcher not configured: run install-mac-watcher.sh <name> (Discord) or install-mac-watcher.sh --ntfy <topic>" >&2
   exit 1
 fi
 
@@ -29,9 +40,9 @@ notify() { # $1 title, $2 body
   title="$(printf '%s' "$1" | tr -d '"\\' | head -c 120)"
   body="$(printf '%s' "$2" | tr '\n' ' ' | tr -d '"\\' | head -c 240)"
   if [ -x "$TN" ]; then
-    # Click jumps to the channel in the Discord app (history/context).
+    # Click jumps to the transport's history (Discord app or ntfy web).
     "$TN" -title "$title" -message "${body:-...}" -sound Glass \
-      -open "discord://-/channels/$GUILD/$CHANNEL" >/dev/null 2>&1 && return 0
+      -open "$OPEN_URL" >/dev/null 2>&1 && return 0
   fi
   osascript -e "display notification \"$body\" with title \"$title\" sound name \"Glass\"" >/dev/null 2>&1
 }
@@ -47,29 +58,54 @@ fetch() { # $1 query string
     "https://discord.com/api/v10/channels/$CHANNEL/messages?$1"
 }
 
-# First run: set the cursor to the newest message without replaying history.
-if [ ! -f "$CONF_DIR/last-id" ]; then
-  fetch "limit=1" | jq -r '.[0].id // empty' > "$CONF_DIR/last-id"
-  echo "watcher started, cursor initialized"
-fi
-
-while true; do
-  LAST="$(cat "$CONF_DIR/last-id" 2>/dev/null)"
-  if [ -z "$LAST" ]; then
+if [ "$MODE" = "discord" ]; then
+  # First run: set the cursor to the newest message without replaying history.
+  if [ ! -f "$CONF_DIR/last-id" ]; then
     fetch "limit=1" | jq -r '.[0].id // empty' > "$CONF_DIR/last-id"
-  else
-    BATCH="$(fetch "after=$LAST&limit=20")"
+    echo "watcher started (discord), cursor initialized"
+  fi
+  while true; do
+    LAST="$(cat "$CONF_DIR/last-id" 2>/dev/null)"
+    if [ -z "$LAST" ]; then
+      fetch "limit=1" | jq -r '.[0].id // empty' > "$CONF_DIR/last-id"
+    else
+      BATCH="$(fetch "after=$LAST&limit=20")"
+      if printf '%s' "$BATCH" | jq -e 'type=="array" and length > 0' >/dev/null 2>&1; then
+        # API returns newest first; deliver oldest first.
+        printf '%s' "$BATCH" | jq -c 'reverse | .[]' | while IFS= read -r MSG; do
+          TITLE="$(printf '%s' "$MSG" | jq -r '.embeds[0].title // .content // "Agent Inbox"')"
+          # Description only — session id and path stay in the Discord history.
+          BODY="$(printf '%s' "$MSG" | jq -r '.embeds[0].description // ""')"
+          notify "$TITLE" "$BODY"
+          inbox_append "$TITLE" "$BODY"
+        done
+        printf '%s' "$BATCH" | jq -r '.[0].id' > "$CONF_DIR/last-id"
+      fi
+    fi
+    sleep "$POLL_SECONDS"
+  done
+else
+  # ntfy mode: poll the topic's JSON feed with a since-cursor (epoch first run,
+  # then last message id so nothing is replayed or missed).
+  CURSOR_FILE="$CONF_DIR/ntfy-cursor"
+  if [ ! -s "$CURSOR_FILE" ]; then
+    date +%s > "$CURSOR_FILE"
+    echo "watcher started (ntfy), cursor initialized"
+  fi
+  while true; do
+    SINCE="$(cat "$CURSOR_FILE")"
+    BATCH="$(curl -m 15 -s "$NTFY_SERVER/$NTFY_TOPIC/json?poll=1&since=$SINCE" \
+      | jq -cs '[.[] | select(.event=="message")]' 2>/dev/null)"
     if printf '%s' "$BATCH" | jq -e 'type=="array" and length > 0' >/dev/null 2>&1; then
-      # API returns newest first; deliver oldest first.
-      printf '%s' "$BATCH" | jq -c 'reverse | .[]' | while IFS= read -r MSG; do
-        TITLE="$(printf '%s' "$MSG" | jq -r '.embeds[0].title // .content // "Agent Inbox"')"
-        # Description only — session id and path stay in the Discord history.
-        BODY="$(printf '%s' "$MSG" | jq -r '.embeds[0].description // ""')"
+      printf '%s' "$BATCH" | jq -c '.[]' | while IFS= read -r MSG; do
+        TITLE="$(printf '%s' "$MSG" | jq -r '.title // "Agent Inbox"')"
+        # First body line only — the footer line stays in the ntfy history.
+        BODY="$(printf '%s' "$MSG" | jq -r '.message // "" | split("\n") | .[0]')"
         notify "$TITLE" "$BODY"
         inbox_append "$TITLE" "$BODY"
       done
-      printf '%s' "$BATCH" | jq -r '.[0].id' > "$CONF_DIR/last-id"
+      printf '%s' "$BATCH" | jq -r 'last.id' > "$CURSOR_FILE"
     fi
-  fi
-  sleep "$POLL_SECONDS"
-done
+    sleep "$POLL_SECONDS"
+  done
+fi

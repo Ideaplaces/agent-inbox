@@ -100,17 +100,31 @@ $SNIPPET"
     ;;
 esac
 
-WEBHOOK_FILE="$CONF_DIR/webhook-url"
-[ -f "$WEBHOOK_FILE" ] || exit 0
-WEBHOOK="$(cat "$WEBHOOK_FILE")"
-[ -n "$WEBHOOK" ] || exit 0
+# --- Transports: whichever is configured gets the event (both is fine) ---
 
-PAYLOAD="$(jq -n \
-  --arg title "$TITLE" \
-  --arg body "$BODY" \
-  --arg footer "$FOOTER" \
-  --argjson color "$COLOR" \
-  '{embeds: [{title: $title, description: $body, color: $color, footer: {text: $footer}}]}')"
+# Discord (webhook): rich embed, channel history doubles as a browsable inbox.
+if [ -s "$CONF_DIR/webhook-url" ]; then
+  WEBHOOK="$(cat "$CONF_DIR/webhook-url")"
+  PAYLOAD="$(jq -n \
+    --arg title "$TITLE" \
+    --arg body "$BODY" \
+    --arg footer "$FOOTER" \
+    --argjson color "$COLOR" \
+    '{embeds: [{title: $title, description: $body, color: $color, footer: {text: $footer}}]}')"
+  curl -m 5 -s -o /dev/null -H "Content-Type: application/json" -d "$PAYLOAD" "$WEBHOOK" || true
+fi
 
-curl -m 5 -s -o /dev/null -H "Content-Type: application/json" -d "$PAYLOAD" "$WEBHOOK" || true
+# ntfy (https://ntfy.sh): zero-setup pub/sub — the topic name IS the channel.
+# Configure via NTFY_TOPIC in ~/.agent-inbox/config or ~/.agent-inbox/ntfy-topic.
+NTFY_SERVER="${NTFY_SERVER:-https://ntfy.sh}"
+if [ -z "${NTFY_TOPIC:-}" ] && [ -s "$CONF_DIR/ntfy-topic" ]; then
+  NTFY_TOPIC="$(cat "$CONF_DIR/ntfy-topic")"
+fi
+if [ -n "${NTFY_TOPIC:-}" ]; then
+  PRIO="default"; [ "$KIND" = "notification" ] && PRIO="high"
+  curl -m 5 -s -o /dev/null \
+    -H "Title: $TITLE" -H "Priority: $PRIO" \
+    -d "$BODY
+$FOOTER" "$NTFY_SERVER/$NTFY_TOPIC" || true
+fi
 exit 0

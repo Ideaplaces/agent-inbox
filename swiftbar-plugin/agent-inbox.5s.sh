@@ -53,3 +53,6 @@ else
   echo "Inbox zero — no agents waiting"
 fi
 [ -n "$CHANNEL" ] && echo "Open channel in Discord | href=discord://-/channels/$GUILD/$CHANNEL"
+if [ -s "$CONF_DIR/ntfy-topic" ]; then
+  echo "Open ntfy history | href=${NTFY_SERVER:-https://ntfy.sh}/$(cat "$CONF_DIR/ntfy-topic")"
+fi
