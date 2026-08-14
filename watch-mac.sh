@@ -16,7 +16,7 @@ POLL_SECONDS=15
 NOTIFY_SOUND=""   # silent by default; set to a macOS sound name (Glass, Ping, ...) to hear one
 [ -f "$CONF_DIR/config" ] && . "$CONF_DIR/config"
 
-GUILD=1462642831184232584
+GUILD="$(cat "$CONF_DIR/guild-id" 2>/dev/null || true)"
 TN=/opt/homebrew/bin/terminal-notifier
 TOKEN="$(cat "$CONF_DIR/bot-token" 2>/dev/null)"
 CHANNEL="$(cat "$CONF_DIR/channel-id" 2>/dev/null)"
@@ -27,7 +27,12 @@ fi
 
 if [ -n "$TOKEN" ] && [ -n "$CHANNEL" ]; then
   MODE=discord
-  OPEN_URL="discord://-/channels/$GUILD/$CHANNEL"
+  # Deep link needs the guild; without it fall back to the web client.
+  if [ -n "$GUILD" ]; then
+    OPEN_URL="discord://-/channels/$GUILD/$CHANNEL"
+  else
+    OPEN_URL="https://discord.com/channels/@me/$CHANNEL"
+  fi
 elif [ -n "${NTFY_TOPIC:-}" ]; then
   MODE=ntfy
   OPEN_URL="$NTFY_SERVER/$NTFY_TOPIC"

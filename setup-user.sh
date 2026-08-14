@@ -1,28 +1,39 @@
 #!/usr/bin/env bash
-# agent-inbox per-developer provisioning: run ONCE per developer (any machine with az).
+# agent-inbox Discord provisioning: creates a private #agent-inbox-<name>
+# channel and its webhook. Run once per person. Idempotent.
 #
-#   ./setup-user.sh <name> <discord-user-id> [bot-token-secret]
-#   ./setup-user.sh luca 687429027862151186
+#   AGENT_INBOX_GUILD=<server-id> AGENT_INBOX_BOT_TOKEN=<bot-token> \
+#     ./setup-user.sh <name> <discord-user-id>
 #
-# Creates (idempotently):
-#   - private Discord channel  #agent-inbox-<name>   (visible to that user + their bot)
-#   - a webhook on that channel
-#   - Key Vault secret         discord-webhook-agent-inbox-<name>
+# Both values can also live in ~/.agent-inbox/config. If AGENT_INBOX_VAULT is
+# set, the bot token is read from Azure Key Vault (secret: discord-bot-token-<name>,
+# override with $3) and the resulting webhook is stored back as
+# discord-webhook-agent-inbox-<name> — a convenience for teams already on Key
+# Vault; everyone else just gets the webhook URL printed.
 #
-# The bot token secret defaults to discord-bot-token-<name> (see
-# ideaplaces-devops/discord/README.md for the bot-per-developer convention).
+# Only needed for the Discord transport. The ntfy transport needs no setup:
+# pick a topic and run ./install.sh --ntfy <topic>.
 set -euo pipefail
+
+CONF_DIR="$HOME/.agent-inbox"
+[ -f "$CONF_DIR/config" ] && . "$CONF_DIR/config"
 
 NAME="${1:?usage: setup-user.sh <name> <discord-user-id> [bot-token-secret]}"
 USER_ID="${2:?usage: setup-user.sh <name> <discord-user-id> [bot-token-secret]}"
 BOT_SECRET="${3:-discord-bot-token-$NAME}"
-
-GUILD=1462642831184232584   # IdeaPlaces server
-VAULT=kv-ideaplaces
+GUILD="${AGENT_INBOX_GUILD:?set AGENT_INBOX_GUILD to your Discord server id}"
+VAULT="${AGENT_INBOX_VAULT:-}"
 CHANNEL_NAME="agent-inbox-$NAME"
-WEBHOOK_SECRET="discord-webhook-agent-inbox-$NAME"
 
-TOKEN=$(az keyvault secret show --vault-name "$VAULT" --name "$BOT_SECRET" --query value -o tsv)
+if [ -n "${AGENT_INBOX_BOT_TOKEN:-}" ]; then
+  TOKEN="$AGENT_INBOX_BOT_TOKEN"
+elif [ -n "$VAULT" ]; then
+  TOKEN=$(az keyvault secret show --vault-name "$VAULT" --name "$BOT_SECRET" --query value -o tsv)
+else
+  echo "set AGENT_INBOX_BOT_TOKEN (or AGENT_INBOX_VAULT to read it from Key Vault)" >&2
+  exit 1
+fi
+
 BOT_ID=$(curl -s -H "Authorization: Bot $TOKEN" https://discord.com/api/v10/users/@me | jq -r '.id')
 
 CHANNEL_ID=$(curl -s -H "Authorization: Bot $TOKEN" "https://discord.com/api/v10/guilds/$GUILD/channels" \
@@ -30,6 +41,7 @@ CHANNEL_ID=$(curl -s -H "Authorization: Bot $TOKEN" "https://discord.com/api/v10
 if [ -n "$CHANNEL_ID" ]; then
   echo "channel #$CHANNEL_NAME exists: $CHANNEL_ID"
 else
+  # Deny @everyone VIEW_CHANNEL (1024); allow the owner and the bot.
   CHANNEL_ID=$(curl -s -X POST -H "Authorization: Bot $TOKEN" -H "Content-Type: application/json" \
     "https://discord.com/api/v10/guilds/$GUILD/channels" \
     -d "{\"name\":\"$CHANNEL_NAME\",\"type\":0,\"topic\":\"Claude Code agent inbox for $NAME: finished sessions and agents waiting for input\",\"permission_overwrites\":[{\"id\":\"$GUILD\",\"type\":0,\"deny\":\"1024\"},{\"id\":\"$USER_ID\",\"type\":1,\"allow\":\"1024\"},{\"id\":\"$BOT_ID\",\"type\":1,\"allow\":\"1024\"}]}" \
@@ -46,8 +58,13 @@ else
   echo "webhook exists"
 fi
 
-az keyvault secret set --vault-name "$VAULT" --name "$WEBHOOK_SECRET" --value "$WH" --query name -o tsv >/dev/null
-echo "Key Vault secret set: $WEBHOOK_SECRET"
 echo ""
-echo "Next, on each machine where $NAME runs Claude Code:   ./install.sh $NAME"
-echo "And on $NAME's Mac (for native notifications):        ./install-mac-watcher.sh $NAME"
+if [ -n "$VAULT" ]; then
+  az keyvault secret set --vault-name "$VAULT" --name "discord-webhook-agent-inbox-$NAME" --value "$WH" --query name -o tsv >/dev/null
+  echo "Key Vault secret set: discord-webhook-agent-inbox-$NAME"
+  echo "Senders:  ./install.sh --keyvault $NAME"
+  echo "Mac:      ./install-mac-watcher.sh --keyvault $NAME"
+else
+  echo "Senders:  ./install.sh --discord-webhook '$WH'"
+  echo "Mac:      ./install-mac-watcher.sh --discord '<bot-token>' $CHANNEL_ID $GUILD"
+fi

@@ -9,7 +9,7 @@
 
 CONF_DIR="$HOME/.agent-inbox"
 UNREAD="$CONF_DIR/unread.log"
-GUILD=1462642831184232584
+GUILD="$(cat "$CONF_DIR/guild-id" 2>/dev/null)"
 CHANNEL="$(cat "$CONF_DIR/channel-id" 2>/dev/null)"
 SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 
@@ -52,7 +52,13 @@ if [ -s "$UNREAD" ]; then
 else
   echo "Inbox zero — no agents waiting"
 fi
-[ -n "$CHANNEL" ] && echo "Open channel in Discord | href=discord://-/channels/$GUILD/$CHANNEL"
+if [ -n "$CHANNEL" ]; then
+  if [ -n "$GUILD" ]; then
+    echo "Open channel in Discord | href=discord://-/channels/$GUILD/$CHANNEL"
+  else
+    echo "Open channel in Discord | href=https://discord.com/channels/@me/$CHANNEL"
+  fi
+fi
 if [ -s "$CONF_DIR/ntfy-topic" ]; then
   echo "Open ntfy history | href=${NTFY_SERVER:-https://ntfy.sh}/$(cat "$CONF_DIR/ntfy-topic")"
 fi
