@@ -9,10 +9,11 @@
 #   ~/.agent-inbox/bot-token    (cached by install-mac-watcher.sh)
 #   ~/.agent-inbox/channel-id   (cached by install-mac-watcher.sh)
 #   ~/.agent-inbox/last-id      (cursor, managed here)
-#   ~/.agent-inbox/config       (optional: POLL_SECONDS)
+#   ~/.agent-inbox/config       (optional: POLL_SECONDS, NOTIFY_SOUND)
 
 CONF_DIR="$HOME/.agent-inbox"
 POLL_SECONDS=15
+NOTIFY_SOUND=""   # silent by default; set to a macOS sound name (Glass, Ping, ...) to hear one
 [ -f "$CONF_DIR/config" ] && . "$CONF_DIR/config"
 
 GUILD=1462642831184232584
@@ -41,10 +42,20 @@ notify() { # $1 title, $2 body
   body="$(printf '%s' "$2" | tr '\n' ' ' | tr -d '"\\' | head -c 240)"
   if [ -x "$TN" ]; then
     # Click jumps to the transport's history (Discord app or ntfy web).
-    "$TN" -title "$title" -message "${body:-...}" -sound Glass \
-      -open "$OPEN_URL" >/dev/null 2>&1 && return 0
+    # Omitting -sound keeps it silent; NOTIFY_SOUND opts back in.
+    if [ -n "$NOTIFY_SOUND" ]; then
+      "$TN" -title "$title" -message "${body:-...}" -sound "$NOTIFY_SOUND" \
+        -open "$OPEN_URL" >/dev/null 2>&1 && return 0
+    else
+      "$TN" -title "$title" -message "${body:-...}" \
+        -open "$OPEN_URL" >/dev/null 2>&1 && return 0
+    fi
   fi
-  osascript -e "display notification \"$body\" with title \"$title\" sound name \"Glass\"" >/dev/null 2>&1
+  if [ -n "$NOTIFY_SOUND" ]; then
+    osascript -e "display notification \"$body\" with title \"$title\" sound name \"$NOTIFY_SOUND\"" >/dev/null 2>&1
+  else
+    osascript -e "display notification \"$body\" with title \"$title\"" >/dev/null 2>&1
+  fi
 }
 
 inbox_append() { # $1 title, $2 body — sticky menubar inbox entry

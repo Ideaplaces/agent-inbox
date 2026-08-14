@@ -73,6 +73,7 @@ Optional `~/.agent-inbox/config` (sourced by both scripts):
 MIN_SECONDS=45          # sender: ignore turns shorter than this
 HOST_LABEL="mac"        # sender: hostname shown in messages
 POLL_SECONDS=15         # watcher: poll interval
+NOTIFY_SOUND=""         # watcher: silent by default; "Glass"/"Ping"/... to play a sound
 NTFY_SERVER="https://ntfy.sh"   # self-hosted ntfy instance
 NTFY_TOPIC="..."        # alternative to the ntfy-topic file
 ```
