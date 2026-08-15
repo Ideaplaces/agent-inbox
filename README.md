@@ -58,7 +58,9 @@ Claude needs your permission to use Bash                    ← why it pinged
 ❯ Should I run the migration against staging first?         ← what it's waiting on
 ```
 
-The menubar dropdown lists recent items with **Mark all read**; clicking a popup opens the transport's history.
+**Click an item to jump to that session** — it opens the working directory in VS Code, over Remote-SSH when the session runs on another machine (the host label doubles as the SSH host alias). The popup itself opens the transport history.
+
+**Items expire on keyboard time, not wall time.** An item clears after `EXPIRE_MINUTES` (default 5) of you actually being at the Mac, so while you work the list stays short instead of piling into noise. The clock stops when you step away, so a coffee-break backlog is still waiting when you return — and starts draining only once you are back. Set `EXPIRE_MINUTES=0` to keep everything until "Mark all read".
 
 ## ⚠️ Your conversation content travels through the transport
 
@@ -95,6 +97,8 @@ MIN_SECONDS=45                  # sender: ignore turns shorter than this
 HOST_LABEL="mac"                # sender: hostname shown in messages
 POLL_SECONDS=15                 # watcher: poll interval
 NOTIFY_SOUND=""                 # watcher: silent by default; "Glass"/"Ping"/... for a sound
+EXPIRE_MINUTES=5                # menubar: clear items after N min at the keyboard (0 = never)
+IDLE_THRESHOLD=90               # menubar: seconds of no input before you count as away
 NTFY_SERVER="https://ntfy.sh"   # self-hosted ntfy instance
 ```
 
