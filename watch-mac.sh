@@ -9,11 +9,13 @@
 #   ~/.agent-inbox/bot-token    (cached by install-mac-watcher.sh)
 #   ~/.agent-inbox/channel-id   (cached by install-mac-watcher.sh)
 #   ~/.agent-inbox/last-id      (cursor, managed here)
-#   ~/.agent-inbox/config       (optional: POLL_SECONDS, NOTIFY_SOUND)
+#   ~/.agent-inbox/config       (optional: POLL_SECONDS, NOTIFY_SOUND, EXPIRE_MINUTES)
 
 CONF_DIR="$HOME/.agent-inbox"
 POLL_SECONDS=15
-NOTIFY_SOUND=""   # silent by default; set to a macOS sound name (Glass, Ping, ...) to hear one
+NOTIFY_SOUND=""     # silent by default; set to a macOS sound name (Glass, Ping, ...) to hear one
+EXPIRE_MINUTES=5    # drop inbox items after this much time AT THE KEYBOARD (0 = never)
+IDLE_THRESHOLD=90   # seconds without input before we consider you away
 [ -f "$CONF_DIR/config" ] && . "$CONF_DIR/config"
 
 GUILD="$(cat "$CONF_DIR/guild-id" 2>/dev/null || true)"
@@ -63,16 +65,52 @@ notify() { # $1 title, $2 body
   fi
 }
 
-inbox_append() { # $1 title, $2 body — sticky menubar inbox entry
-  printf '%s\t%s\t%s\n' "$(date '+%H:%M')" \
+# Seconds you have actually spent at this Mac, accumulated by the poll loop.
+# Inbox items expire against THIS clock, not wall time: while you work they
+# age out as noise, while you are away they wait for you.
+presence() { cat "$CONF_DIR/presence" 2>/dev/null || echo 0; }
+
+presence_tick() {
+  local idle now
+  idle="$(ioreg -c IOHIDSystem 2>/dev/null | awk '/HIDIdleTime/ {print int($NF/1000000000); exit}')"
+  [ -n "$idle" ] || idle=0
+  if [ "$idle" -lt "$IDLE_THRESHOLD" ]; then
+    now=$(( $(presence) + POLL_SECONDS ))
+    printf '%s' "$now" > "$CONF_DIR/presence"
+  fi
+}
+
+# unread.log columns: HH:MM \t presence-at-arrival \t host \t cwd \t title \t body
+inbox_append() { # $1 title, $2 body, $3 host, $4 cwd
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$(date '+%H:%M')" "$(presence)" \
+    "${3:-}" "${4:-}" \
     "$(printf '%s' "$1" | tr '\t\n' '  ')" \
     "$(printf '%s' "$2" | tr '\t\n' '  ' | head -c 160)" >> "$CONF_DIR/unread.log"
+}
+
+inbox_expire() {
+  [ "${EXPIRE_MINUTES:-0}" -gt 0 ] || return 0
+  [ -s "$CONF_DIR/unread.log" ] || return 0
+  local cutoff tmp
+  cutoff=$(( $(presence) - EXPIRE_MINUTES * 60 ))
+  [ "$cutoff" -gt 0 ] || return 0
+  tmp="$(mktemp)"
+  # Keep rows younger than the cutoff. Legacy rows (no presence column) are
+  # dropped once they are older than the window.
+  awk -F'\t' -v c="$cutoff" 'NF>=6 ? ($2+0) > c : 0' "$CONF_DIR/unread.log" > "$tmp" \
+    && mv "$tmp" "$CONF_DIR/unread.log" || rm -f "$tmp"
 }
 
 fetch() { # $1 query string
   curl -m 10 -s -H "Authorization: Bot $TOKEN" \
     "https://discord.com/api/v10/channels/$CHANNEL/messages?$1"
 }
+
+# Titles read "<emoji> <repo> @ <host>[ (duration)]"; footers end with the cwd
+# after " · ". Both let the menubar open the session in VS Code.
+host_of()   { printf '%s' "$1" | sed -n 's/.* @ \([^ (]*\).*/\1/p'; }
+cwd_of()    { printf '%s' "$1" | sed -n 's/.*· \(\/.*\)$/\1/p'; }
 
 if [ "$MODE" = "discord" ]; then
   # First run: set the cursor to the newest message without replaying history.
@@ -92,12 +130,15 @@ if [ "$MODE" = "discord" ]; then
           TITLE="$(printf '%s' "$MSG" | jq -r '.embeds[0].title // .content // "Agent Inbox"')"
           # Description only — session id and path stay in the Discord history.
           BODY="$(printf '%s' "$MSG" | jq -r '.embeds[0].description // ""')"
+          FOOT="$(printf '%s' "$MSG" | jq -r '.embeds[0].footer.text // ""')"
           notify "$TITLE" "$BODY"
-          inbox_append "$TITLE" "$BODY"
+          inbox_append "$TITLE" "$BODY" "$(host_of "$TITLE")" "$(cwd_of "$FOOT")"
         done
         printf '%s' "$BATCH" | jq -r '.[0].id' > "$CONF_DIR/last-id"
       fi
     fi
+    presence_tick
+    inbox_expire
     sleep "$POLL_SECONDS"
   done
 else
@@ -117,11 +158,14 @@ else
         TITLE="$(printf '%s' "$MSG" | jq -r '.title // "Agent Inbox"')"
         # First body line only — the footer line stays in the ntfy history.
         BODY="$(printf '%s' "$MSG" | jq -r '.message // "" | split("\n") | .[0]')"
+        FOOT="$(printf '%s' "$MSG" | jq -r '.message // "" | split("\n") | last')"
         notify "$TITLE" "$BODY"
-        inbox_append "$TITLE" "$BODY"
+        inbox_append "$TITLE" "$BODY" "$(host_of "$TITLE")" "$(cwd_of "$FOOT")"
       done
       printf '%s' "$BATCH" | jq -r 'last.id' > "$CURSOR_FILE"
     fi
+    presence_tick
+    inbox_expire
     sleep "$POLL_SECONDS"
   done
 fi
