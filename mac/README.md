@@ -31,12 +31,22 @@ SIGN_IDENTITY="Developer ID Application: You (TEAMID)" \
 NOTARY_PROFILE=agent-inbox ./package-dmg.sh         # signed + notarized + stapled
 ```
 
-Create the notary profile once:
+Credentials, whichever you have:
 
 ```bash
+# App Store Connect API key (preferred: survives Apple ID password changes)
+NOTARY_KEY=~/AuthKey_XXXXXXXXXX.p8 NOTARY_KEY_ID=XXXXXXXXXX \
+NOTARY_ISSUER=<issuer-uuid> ./package-dmg.sh
+
+# or a stored keychain profile
 xcrun notarytool store-credentials agent-inbox \
   --apple-id you@example.com --team-id TEAMID --password <app-specific-password>
+NOTARY_PROFILE=agent-inbox ./package-dmg.sh
 ```
+
+Both the app and the disk image are notarized and stapled. Stapling only the image
+leaves the copy in `/Applications` without a ticket, so a Mac that is offline on first
+launch has nothing to fall back on.
 
 Without notarization, Gatekeeper on someone else's Mac refuses to open the app with
 "cannot be opened because the developer cannot be verified". Notarize anything you hand to
