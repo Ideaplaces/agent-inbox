@@ -11,6 +11,8 @@
 #   agent-inbox.5s.sh clear
 
 CONF_DIR="$HOME/.agent-inbox"
+# Sourced for NTFY_SERVER, so the history link points at a self-hosted instance.
+[ -f "$CONF_DIR/config" ] && . "$CONF_DIR/config"
 UNREAD="$CONF_DIR/unread.log"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SELF="$SELF_DIR/$(basename "${BASH_SOURCE[0]}")"

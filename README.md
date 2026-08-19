@@ -11,7 +11,7 @@ If you run several Claude Code sessions in parallel (some local, some over SSH o
 - 🧵 **Context on every message** — what the conversation is about and what you last asked, so a ping from a two-day-old session still rings the right bell
 - 📌 **Sticky menubar inbox** — a `🖐️2 ✅3` badge that stays until you mark it read. Go for coffee, come back, see who's waiting.
 
-It's ~400 lines of bash. No server to run, no app to install (beyond two brew formulas), no account required.
+It's about 700 lines of bash. No server to run, no service to sign up for, no account required: two `brew install`s on the Mac and you're done.
 
 ```
 senders (Claude Code hooks)         transport                surface (your Mac)
@@ -37,6 +37,17 @@ echo $TOPIC
 brew install terminal-notifier && brew install --cask swiftbar
 ./install-mac-watcher.sh --ntfy $TOPIC    # on the Mac that should get notified
 ```
+
+**On every machine that isn't the Mac, set `HOST_LABEL` to that machine's SSH host
+alias.** That is the name you type after `ssh`, as it appears in your Mac's `~/.ssh/config`:
+
+```bash
+echo 'HOST_LABEL="devbox"' >> ~/.agent-inbox/config   # run this ON the dev box
+```
+
+It defaults to the machine's own hostname, which is usually *not* an alias your Mac
+knows. The label is what click-to-open feeds to VS Code's Remote-SSH, so if it isn't a
+real alias, clicking an item does nothing.
 
 Restart any running Claude Code sessions to pick up the hooks. Want phone push too? Install the ntfy iOS/Android app and subscribe to the same topic.
 
@@ -94,7 +105,9 @@ Optional `~/.agent-inbox/config`, sourced by the scripts:
 
 ```bash
 MIN_SECONDS=45                  # sender: ignore turns shorter than this
-HOST_LABEL="mac"                # sender: hostname shown in messages
+HOST_LABEL="mac"                # sender: machine name in messages; on remote
+                                #   machines set it to that machine's SSH host
+                                #   alias, or click-to-open cannot reach it
 POLL_SECONDS=15                 # watcher: poll interval
 NOTIFY_SOUND=""                 # watcher: silent by default; "Glass"/"Ping"/... for a sound
 EXPIRE_MINUTES=5                # menubar: clear items after N min at the keyboard (0 = never)
@@ -102,22 +115,29 @@ IDLE_THRESHOLD=90               # menubar: seconds of no input before you count 
 NTFY_SERVER="https://ntfy.sh"   # self-hosted ntfy instance
 ```
 
-Runtime state lives in `~/.agent-inbox/`: transport config (`ntfy-topic`, `webhook-url`, `bot-token`, `channel-id`, `guild-id`), cursors (`last-id`, `ntfy-cursor`), `unread.log` (menubar inbox), `watcher.log`.
+Runtime state lives in `~/.agent-inbox/`: transport config (`ntfy-topic`, `webhook-url`, `bot-token`, `channel-id`, `guild-id`, `user`), cursors (`last-id`, `ntfy-cursor`), `state/<session>.start` (turn timers), `presence` (seconds clocked at the keyboard), `unread.log` (menubar inbox), `read-archive.log` (what you marked read), `watcher.log`.
 
 ## Requirements
 
-- **Senders** (any OS Claude Code runs on): `bash`, `jq`, `curl`
+- **Senders** (any OS Claude Code runs on): `bash`, `jq`, `curl` (plus `openssl` if you generate the topic the way the Quickstart does)
 - **Mac surface**: macOS, [terminal-notifier](https://github.com/julienXX/terminal-notifier), [SwiftBar](https://swiftbar.app) (both `brew install`), plus `jq`/`curl`
 
 ## How it works
 
 `install.sh` merges three hooks into `~/.claude/settings.json` (idempotent, backs the file up first). On `Stop` and `Notification`, `notify.sh` reads the session transcript, extracts the context lines, and posts to your transport. On the Mac, `watch-mac.sh` runs as a launchd agent, polls the transport, raises a native notification, and appends to `unread.log`, which the SwiftBar plugin renders as the sticky menubar inbox.
 
-Uninstall: remove the three `agent-inbox` entries from `~/.claude/settings.json`, `launchctl unload ~/Library/LaunchAgents/com.agent-inbox.watcher.plist`, and delete `~/.agent-inbox/`.
+Uninstall: remove the three `agent-inbox` entries from `~/.claude/settings.json` (the installer left the original at `~/.claude/settings.json.bak.agent-inbox`), then on the Mac:
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.agent-inbox.watcher.plist
+rm ~/Library/LaunchAgents/com.agent-inbox.watcher.plist
+rm "$(defaults read com.ameba.SwiftBar PluginDirectory)/agent-inbox.5s.sh"   # plugin symlink
+rm -rf ~/.agent-inbox/
+```
 
 ## Roadmap
 
-A richer Mac client: per-item read state, click-to-open the exact VS Code window for a waiting session, and cloud/remote agents in the same inbox.
+A richer Mac client: per-item read state, collapsing (a ✅ retiring an earlier 🖐️ from the same session), and cloud/remote agents in the same inbox.
 
 ## License
 

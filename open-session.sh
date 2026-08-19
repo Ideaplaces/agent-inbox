@@ -14,6 +14,8 @@ CODE=/opt/homebrew/bin/code
 [ -x "$CODE" ] || CODE="$(command -v code || true)"
 [ -n "$CODE" ] || { open "$DIR" 2>/dev/null; exit 0; }
 
+# A directory that also exists locally is assumed to be a local session. On two
+# machines that share a directory layout this opens the local copy.
 LOCAL="$(hostname -s)"
 if [ -z "$HOST" ] || [ "$HOST" = "$LOCAL" ] || [ "$HOST" = "mac" ] || [ -d "$DIR" ]; then
   "$CODE" "$DIR"

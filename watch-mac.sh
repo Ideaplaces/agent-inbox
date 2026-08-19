@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
-# agent-inbox Mac watcher: polls the developer's #agent-inbox-<name> Discord
-# channel and surfaces every new message on the Mac:
-#   - native macOS notification (click opens the Discord channel)
+# agent-inbox Mac watcher: polls the configured transport (ntfy topic or
+# Discord channel) and surfaces every new message on the Mac:
+#   - native macOS notification (click opens the transport's history)
 #   - appends to ~/.agent-inbox/unread.log, the sticky inbox rendered in the
 #     menubar by swiftbar-plugin/agent-inbox.5s.sh until marked read
 #
 # Runs as a launchd agent (see install-mac-watcher.sh). Reads:
-#   ~/.agent-inbox/bot-token    (cached by install-mac-watcher.sh)
-#   ~/.agent-inbox/channel-id   (cached by install-mac-watcher.sh)
-#   ~/.agent-inbox/last-id      (cursor, managed here)
-#   ~/.agent-inbox/config       (optional: POLL_SECONDS, NOTIFY_SOUND, EXPIRE_MINUTES)
+#   ~/.agent-inbox/ntfy-topic   (ntfy transport, cached by install-mac-watcher.sh)
+#   ~/.agent-inbox/ntfy-cursor  (ntfy cursor, managed here)
+#   ~/.agent-inbox/bot-token    (Discord transport, cached by install-mac-watcher.sh)
+#   ~/.agent-inbox/channel-id   (Discord transport, cached by install-mac-watcher.sh)
+#   ~/.agent-inbox/guild-id     (Discord, optional: enables the desktop deep link)
+#   ~/.agent-inbox/last-id      (Discord cursor, managed here)
+#   ~/.agent-inbox/presence     (seconds spent at the keyboard, managed here)
+#   ~/.agent-inbox/config       (optional: POLL_SECONDS, NOTIFY_SOUND,
+#                                EXPIRE_MINUTES, IDLE_THRESHOLD, NTFY_SERVER)
 
 CONF_DIR="$HOME/.agent-inbox"
 POLL_SECONDS=15
@@ -39,7 +44,9 @@ elif [ -n "${NTFY_TOPIC:-}" ]; then
   MODE=ntfy
   OPEN_URL="$NTFY_SERVER/$NTFY_TOPIC"
 else
-  echo "watcher not configured: run install-mac-watcher.sh <name> (Discord) or install-mac-watcher.sh --ntfy <topic>" >&2
+  echo "watcher not configured. Run one of:" >&2
+  echo "  ./install-mac-watcher.sh --ntfy <topic>" >&2
+  echo "  ./install-mac-watcher.sh --discord <bot-token> <channel-id> [guild-id]" >&2
   exit 1
 fi
 

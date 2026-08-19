@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
-# agent-inbox: Claude Code hook -> Discord #agent-inbox
+# agent-inbox sender: Claude Code hook -> ntfy topic and/or Discord channel.
 #
 # Called by Claude Code hooks with the event kind as $1 (prompt|stop|notification).
 # Reads the hook JSON payload on stdin. Never blocks or fails the session:
-# every exit path is 0 and the Discord post has a short timeout.
+# every exit path is 0 and each post has a short timeout.
 #
-# Install: ./install.sh  (writes hooks into ~/.claude/settings.json and caches
-# the webhook URL from Azure Key Vault into ~/.agent-inbox/webhook-url)
+# Whichever transports are configured under ~/.agent-inbox/ receive the event;
+# having both is fine. Install with ./install.sh --ntfy <topic> or
+# ./install.sh --discord-webhook <url>, which also writes the hooks into
+# ~/.claude/settings.json.
+#
+# HOST_LABEL (see ~/.agent-inbox/config) is the machine name shown in every
+# message. On a remote machine set it to that machine's SSH host alias, so the
+# Mac menubar can open the session over Remote-SSH.
 
 KIND="$1"
 CONF_DIR="$HOME/.agent-inbox"
