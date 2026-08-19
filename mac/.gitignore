@@ -1,0 +1,4 @@
+.build/
+build/
+*.dmg
+Resources/AppIcon.icns

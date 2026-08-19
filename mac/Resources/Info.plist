@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>                  <string>Agent Inbox</string>
+  <key>CFBundleDisplayName</key>           <string>Agent Inbox</string>
+  <key>CFBundleExecutable</key>            <string>AgentInbox</string>
+  <key>CFBundleIdentifier</key>            <string>com.ideaplaces.agent-inbox</string>
+  <key>CFBundlePackageType</key>           <string>APPL</string>
+  <key>CFBundleShortVersionString</key>    <string>__VERSION__</string>
+  <key>CFBundleVersion</key>               <string>__BUILD__</string>
+  <key>CFBundleIconFile</key>              <string>AppIcon</string>
+  <key>LSMinimumSystemVersion</key>        <string>14.0</string>
+  <!-- Menubar app: no Dock icon, no app switcher entry. -->
+  <key>LSUIElement</key>                   <true/>
+  <key>NSHumanReadableCopyright</key>      <string>MIT licensed. github.com/Ideaplaces/agent-inbox</string>
+  <key>NSSupportsAutomaticTermination</key><false/>
+  <key>NSSupportsSuddenTermination</key>   <false/>
+</dict>
+</plist>
