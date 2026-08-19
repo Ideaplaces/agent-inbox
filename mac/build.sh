@@ -58,8 +58,15 @@ printf 'APPL????' > "$CONTENTS/PkgInfo"
 
 echo "==> Signing"
 IDENTITY="${SIGN_IDENTITY:--}"
-# Hardened runtime is required for notarization and harmless without it.
-codesign --force --deep --options runtime --timestamp=none \
+# Notarization requires a hardened runtime AND a secure timestamp from Apple.
+# An ad-hoc signature cannot carry a timestamp, so only ask for one when
+# signing with a real identity.
+if [ "$IDENTITY" = "-" ]; then
+  TIMESTAMP=--timestamp=none
+else
+  TIMESTAMP=--timestamp
+fi
+codesign --force --deep --options runtime "$TIMESTAMP" \
   --entitlements Resources/AgentInbox.entitlements \
   --sign "$IDENTITY" "$APP"
 codesign --verify --verbose=2 "$APP" 2>&1 | sed 's/^/    /'

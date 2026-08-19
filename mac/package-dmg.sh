@@ -2,12 +2,14 @@
 # Build a distributable Agent Inbox DMG.
 #
 #   ./package-dmg.sh                       unsigned, for local testing
-#   SIGN_IDENTITY="Developer ID Application: You (TEAMID)" \
-#   NOTARY_PROFILE=agent-inbox ./package-dmg.sh
 #
-# NOTARY_PROFILE is a keychain profile created once with:
-#   xcrun notarytool store-credentials agent-inbox \
-#     --apple-id you@example.com --team-id TEAMID --password <app-specific-password>
+# Signing:
+#   SIGN_IDENTITY="Developer ID Application: You (TEAMID)"
+#
+# Notarization, whichever set of credentials you have:
+#   NOTARY_PROFILE=agent-inbox                       a stored keychain profile
+#   NOTARY_KEY=AuthKey.p8 NOTARY_KEY_ID=... NOTARY_ISSUER=...   App Store Connect API key
+#   NOTARY_APPLE_ID=you@example.com NOTARY_TEAM_ID=... NOTARY_PASSWORD=...   app-specific password
 #
 # Without notarization Gatekeeper shows "cannot be opened because the developer
 # cannot be verified" on another Mac. Notarize anything you hand to someone.
@@ -43,15 +45,25 @@ if [ -n "${SIGN_IDENTITY:-}" ]; then
   codesign --force --sign "$SIGN_IDENTITY" --timestamp "$DMG"
 fi
 
+NOTARY_ARGS=()
 if [ -n "${NOTARY_PROFILE:-}" ]; then
+  NOTARY_ARGS=(--keychain-profile "$NOTARY_PROFILE")
+elif [ -n "${NOTARY_KEY:-}" ] && [ -n "${NOTARY_KEY_ID:-}" ] && [ -n "${NOTARY_ISSUER:-}" ]; then
+  NOTARY_ARGS=(--key "$NOTARY_KEY" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER")
+elif [ -n "${NOTARY_APPLE_ID:-}" ] && [ -n "${NOTARY_TEAM_ID:-}" ] && [ -n "${NOTARY_PASSWORD:-}" ]; then
+  NOTARY_ARGS=(--apple-id "$NOTARY_APPLE_ID" --team-id "$NOTARY_TEAM_ID" --password "$NOTARY_PASSWORD")
+fi
+
+if [ ${#NOTARY_ARGS[@]} -gt 0 ]; then
   echo "==> Notarizing (this waits on Apple, usually a few minutes)"
-  xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
+  xcrun notarytool submit "$DMG" "${NOTARY_ARGS[@]}" --wait
   echo "==> Stapling"
   xcrun stapler staple "$DMG"
   xcrun stapler validate "$DMG"
-  spctl --assess --type open --context context:primary-signature -vv "$DMG" || true
+  echo "==> Gatekeeper assessment"
+  spctl --assess --type open --context context:primary-signature -vv "$DMG"
 else
-  echo "==> Skipping notarization (set NOTARY_PROFILE to enable)"
+  echo "==> Skipping notarization (no credentials set; see the header)"
 fi
 
 rm -rf "$STAGE"
