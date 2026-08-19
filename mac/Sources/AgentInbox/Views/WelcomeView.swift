@@ -4,6 +4,7 @@ import SwiftUI
 /// First run, in one window: pick where events travel, wire up this Mac, and
 /// get the one line to paste on every other machine. Nothing to clone, no
 /// scripts to find, no dotfile to edit.
+@MainActor
 struct WelcomeView: View {
     @Environment(AppModel.self) private var model
     @State private var copied = false
@@ -139,6 +140,7 @@ struct WelcomeView: View {
 
 /// Shared by onboarding and Settings so there is exactly one place that knows
 /// what a transport needs.
+@MainActor
 struct TransportPicker: View {
     @Environment(AppModel.self) private var model
 

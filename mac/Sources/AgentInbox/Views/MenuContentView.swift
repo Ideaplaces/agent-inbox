@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 
+@MainActor
 struct MenuContentView: View {
     @Environment(AppModel.self) private var model
 
@@ -148,6 +149,7 @@ struct MenuContentView: View {
     }
 }
 
+@MainActor
 private struct ItemRow: View {
     @Environment(AppModel.self) private var model
     let item: InboxItem

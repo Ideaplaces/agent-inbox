@@ -1,6 +1,7 @@
 import SwiftUI
 
 @main
+@MainActor
 struct AgentInboxApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var model = AppModel.shared
