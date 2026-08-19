@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  mac-app:
+    name: Mac app
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test
+        working-directory: mac
+        run: swift test
+
+      - name: Build
+        working-directory: mac
+        run: ./build.sh
+
+      - name: Package
+        working-directory: mac
+        run: ./package-dmg.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AgentInbox-dmg
+          path: mac/build/*.dmg
+
+  shell:
+    name: Shell senders
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax check
+        run: for f in *.sh mac/*.sh; do bash -n "$f"; done
+
+      - name: Lint
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y shellcheck
+          shellcheck --severity=warning *.sh mac/*.sh
+
+  notify:
+    name: Notify on failure
+    needs: [mac-app, shell]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post to Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_CICD }}
+        run: |
+          [ -n "$WEBHOOK" ] || exit 0
+          curl -m 10 -s -H 'Content-Type: application/json' -d @- "$WEBHOOK" <<JSON
+          {"embeds":[{"title":"agent-inbox CI failed","color":15158332,
+          "description":"[${GITHUB_REF_NAME}](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) failed on \`${GITHUB_SHA:0:7}\`"}]}
+          JSON

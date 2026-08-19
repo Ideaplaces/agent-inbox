@@ -1,0 +1,76 @@
+name: Release
+
+# Tag a version to publish a signed, notarized DMG:
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# Required repository secrets:
+#   MACOS_CERTIFICATE          base64 of a Developer ID Application .p12
+#   MACOS_CERTIFICATE_PASSWORD password for that .p12
+#   MACOS_SIGN_IDENTITY        e.g. "Developer ID Application: You (TEAMID)"
+#   APPLE_ID                   Apple ID used for notarization
+#   APPLE_TEAM_ID              10-character team id
+#   APPLE_APP_PASSWORD         app-specific password for that Apple ID
+#
+# Without the signing secrets the job still builds and publishes an unsigned
+# DMG, which is useful for pre-releases but shows a Gatekeeper warning.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    env:
+      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test
+        working-directory: mac
+        run: swift test
+
+      - name: Import signing certificate
+        if: env.MACOS_CERTIFICATE != ''
+        run: |
+          KEYCHAIN=$RUNNER_TEMP/build.keychain
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
+            -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      - name: Store notarization credentials
+        if: env.APPLE_ID != ''
+        run: |
+          xcrun notarytool store-credentials agent-inbox \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD"
+
+      - name: Build and package
+        working-directory: mac
+        env:
+          SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          NOTARY_PROFILE: ${{ secrets.APPLE_ID != '' && 'agent-inbox' || '' }}
+        run: ./package-dmg.sh
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: mac/build/*.dmg
+          generate_release_notes: true
