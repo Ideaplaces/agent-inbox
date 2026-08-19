@@ -1,7 +1,8 @@
 # Agent Inbox.app
 
 The Mac surface: a menubar app that polls your transport, raises native notifications, and
-keeps a sticky inbox of every session that finished or needs you.
+keeps a sticky inbox of every session that finished or needs you. Reading an item is the
+whole interaction; clicking it clears it.
 
 It replaces the old three-part Mac setup (a launchd watcher, terminal-notifier, and a
 SwiftBar plugin) with one signed app that has its own icon, its own Settings window, and
@@ -77,7 +78,6 @@ Sources/AgentInbox/
 │   ├── Presence.swift         time actually spent at the keyboard
 │   ├── HookInstaller.swift    safe edits to ~/.claude/settings.json
 │   ├── SenderConfig.swift     the ~/.agent-inbox contract with the bash senders
-│   ├── SessionOpener.swift    VS Code, local or over Remote-SSH
 │   └── Notifier.swift
 └── Views/                     menu, welcome, settings
 Scripts/make-icon.swift        renders the app icon; no binary asset is committed

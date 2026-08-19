@@ -38,8 +38,8 @@ curl -fsSL https://raw.githubusercontent.com/Ideaplaces/agent-inbox/main/install
   | bash -s -- --ntfy <your-topic> --host-label <ssh-host-alias>
 ```
 
-Set `--host-label` to that machine's SSH host alias. It is what lets the Mac open a
-remote session in VS Code over Remote-SSH when you click it.
+Set `--host-label` to something you will recognise in a notification title, such as the
+machine's SSH host alias.
 
 Restart any running Claude Code sessions to pick up the hooks.
 
@@ -77,7 +77,7 @@ Claude needs your permission to use Bash                    ← why it pinged
 ❯ Should I run the migration against staging first?         ← what it's waiting on
 ```
 
-**Click an item to jump to that session** — it opens the working directory in VS Code, over Remote-SSH when the session runs on another machine (the host label doubles as the SSH host alias). The popup itself opens the transport history.
+**Click an item to clear it.** There is no jump-to-session: the notification carries only the first eight characters of the session id, and `claude --resume` needs the whole one, so anything a click could open would be the wrong window.
 
 **Items expire on keyboard time, not wall time.** An item clears after `EXPIRE_MINUTES` (default 5) of you actually being at the Mac, so while you work the list stays short instead of piling into noise. The clock stops when you step away, so a coffee-break backlog is still waiting when you return — and starts draining only once you are back. Set `EXPIRE_MINUTES=0` to keep everything until "Mark all read".
 
@@ -112,16 +112,14 @@ The bot token is only needed on the Mac (reading messages back); sending machine
 Optional `~/.agent-inbox/config`, sourced by the scripts:
 
 ```bash
-MIN_SECONDS=45                  # sender: ignore turns shorter than this
-HOST_LABEL="mac"                # sender: machine name in messages; on remote
-                                #   machines set it to that machine's SSH host
-                                #   alias, or click-to-open cannot reach it
-POLL_SECONDS=15                 # watcher: poll interval
-NOTIFY_SOUND=""                 # watcher: silent by default; "Glass"/"Ping"/... for a sound
-EXPIRE_MINUTES=5                # menubar: clear items after N min at the keyboard (0 = never)
-IDLE_THRESHOLD=90               # menubar: seconds of no input before you count as away
+MIN_SECONDS=20                  # ignore turns shorter than this
+HOST_LABEL="mac"                # machine name shown in messages
 NTFY_SERVER="https://ntfy.sh"   # self-hosted ntfy instance
 ```
+
+These are sender-side only. Everything the Mac surface does (poll interval, sound, expiry,
+idle threshold) lives in the app's own Settings, and the app writes the keys above so the
+two can never disagree.
 
 Runtime state lives in `~/.agent-inbox/`: `bin/notify.sh` (unpacked from the app), transport config for the senders (`ntfy-topic`, `webhook-url`, `channel-id`, `guild-id`), `state/<session>.start` (turn timers), `presence` (seconds clocked at the keyboard), and `items.json` (the inbox).
 

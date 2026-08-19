@@ -67,12 +67,6 @@ struct InboxItem: Codable, Identifiable, Equatable {
     var subtitle: String? {
         ask ?? summary ?? detail
     }
-
-    /// True when the session is on this Mac, which decides local versus
-    /// Remote-SSH when opening it in an editor.
-    func isLocal(localHost: String) -> Bool {
-        host.isEmpty || host == localHost || host == "mac"
-    }
 }
 
 enum MessageParser {

@@ -97,16 +97,4 @@ final class MessageParserTests: XCTestCase {
         XCTAssertEqual(footer, "")
     }
 
-    func testLocalHostDetection() {
-        let item = InboxItem(
-            id: "1", kind: .finished, repo: "r", host: "mac", duration: nil, summary: nil,
-            ask: nil, detail: nil, waitingOn: nil, sessionID: nil, cwd: "/tmp",
-            receivedAt: Date(), presenceAtArrival: 0)
-        XCTAssertTrue(item.isLocal(localHost: "anything"))
-
-        var remote = item
-        remote.host = "devbox"
-        XCTAssertFalse(remote.isLocal(localHost: "mymac"))
-        XCTAssertTrue(remote.isLocal(localHost: "devbox"))
-    }
 }
