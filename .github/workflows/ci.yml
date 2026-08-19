@@ -9,6 +9,7 @@ jobs:
   mac-app:
     name: Mac app
     runs-on: macos-14
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -32,6 +33,7 @@ jobs:
   shell:
     name: Shell senders
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -39,15 +41,14 @@ jobs:
         run: for f in *.sh mac/*.sh; do bash -n "$f"; done
 
       - name: Lint
-        run: |
-          sudo apt-get update -qq && sudo apt-get install -y shellcheck
-          shellcheck --severity=warning *.sh mac/*.sh
+        run: shellcheck --severity=warning *.sh mac/*.sh
 
   notify:
     name: Notify on failure
     needs: [mac-app, shell]
     if: failure()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Post to Discord
         env:
