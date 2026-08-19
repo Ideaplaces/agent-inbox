@@ -21,7 +21,33 @@ APP="build/Agent Inbox.app"
 STAGE="build/dmg"
 DMG="build/AgentInbox-$VERSION.dmg"
 
+NOTARY_ARGS=()
+if [ -n "${NOTARY_PROFILE:-}" ]; then
+  NOTARY_ARGS=(--keychain-profile "$NOTARY_PROFILE")
+elif [ -n "${NOTARY_KEY:-}" ] && [ -n "${NOTARY_KEY_ID:-}" ] && [ -n "${NOTARY_ISSUER:-}" ]; then
+  NOTARY_ARGS=(--key "$NOTARY_KEY" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER")
+elif [ -n "${NOTARY_APPLE_ID:-}" ] && [ -n "${NOTARY_TEAM_ID:-}" ] && [ -n "${NOTARY_PASSWORD:-}" ]; then
+  NOTARY_ARGS=(--apple-id "$NOTARY_APPLE_ID" --team-id "$NOTARY_TEAM_ID" --password "$NOTARY_PASSWORD")
+else
+  echo "==> No notarization credentials set; the image will not be notarized"
+fi
+
 ./build.sh
+
+notarize() {  # $1 = path to submit
+  xcrun notarytool submit "$1" "${NOTARY_ARGS[@]}" --wait
+  xcrun stapler staple "$1"
+}
+
+if [ ${#NOTARY_ARGS[@]} -gt 0 ]; then
+  echo "==> Notarizing the app (this waits on Apple)"
+  ditto -c -k --keepParent "$APP" build/app.zip
+  # The zip is only a carrier; the ticket is stapled to the .app itself.
+  xcrun notarytool submit build/app.zip "${NOTARY_ARGS[@]}" --wait
+  xcrun stapler staple "$APP"
+  xcrun stapler validate "$APP"
+  rm -f build/app.zip
+fi
 
 echo "==> Staging disk image"
 rm -rf "$STAGE" "$DMG" build/hybrid.dmg
@@ -45,20 +71,9 @@ if [ -n "${SIGN_IDENTITY:-}" ]; then
   codesign --force --sign "$SIGN_IDENTITY" --timestamp "$DMG"
 fi
 
-NOTARY_ARGS=()
-if [ -n "${NOTARY_PROFILE:-}" ]; then
-  NOTARY_ARGS=(--keychain-profile "$NOTARY_PROFILE")
-elif [ -n "${NOTARY_KEY:-}" ] && [ -n "${NOTARY_KEY_ID:-}" ] && [ -n "${NOTARY_ISSUER:-}" ]; then
-  NOTARY_ARGS=(--key "$NOTARY_KEY" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER")
-elif [ -n "${NOTARY_APPLE_ID:-}" ] && [ -n "${NOTARY_TEAM_ID:-}" ] && [ -n "${NOTARY_PASSWORD:-}" ]; then
-  NOTARY_ARGS=(--apple-id "$NOTARY_APPLE_ID" --team-id "$NOTARY_TEAM_ID" --password "$NOTARY_PASSWORD")
-fi
-
 if [ ${#NOTARY_ARGS[@]} -gt 0 ]; then
-  echo "==> Notarizing (this waits on Apple, usually a few minutes)"
-  xcrun notarytool submit "$DMG" "${NOTARY_ARGS[@]}" --wait
-  echo "==> Stapling"
-  xcrun stapler staple "$DMG"
+  echo "==> Notarizing the disk image"
+  notarize "$DMG"
   xcrun stapler validate "$DMG"
   echo "==> Gatekeeper assessment"
   spctl --assess --type open --context context:primary-signature -vv "$DMG"
