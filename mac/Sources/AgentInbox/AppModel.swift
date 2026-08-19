@@ -17,15 +17,11 @@ final class AppModel {
     /// Shown in the menu when a background action has something to say.
     var transientMessage: String?
 
-    let localHost: String
-
     private init() {
         let presence = Presence()
         self.presence = presence
         self.store = InboxStore(presence: presence)
         self.poller = Poller(settings: settings, store: store, presence: presence)
-        self.localHost = ProcessInfo.processInfo.hostName
-            .components(separatedBy: ".").first ?? "mac"
     }
 
     func start() {
@@ -68,11 +64,6 @@ final class AppModel {
         } catch {
             transientMessage = error.localizedDescription
         }
-    }
-
-    func open(_ item: InboxItem) {
-        store.markRead(item.id)
-        SessionOpener.open(item, localHost: localHost)
     }
 
     func openHistory() {
@@ -154,11 +145,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         await MainActor.run {
             let model = AppModel.shared
             guard let id, let item = model.store.item(id: id) else { return }
+            // Every route is the same: acknowledge it. There is nothing to
+            // open, so a click on the banner just clears the item.
             switch response.actionIdentifier {
-            case Notifier.readAction:
-                model.store.markRead(id)
-            case Notifier.openAction, UNNotificationDefaultActionIdentifier:
-                model.open(item)
+            case Notifier.readAction, UNNotificationDefaultActionIdentifier:
+                model.store.markRead(item.id)
             default:
                 break
             }

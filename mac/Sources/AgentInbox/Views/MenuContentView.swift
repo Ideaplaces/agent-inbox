@@ -31,7 +31,7 @@ struct MenuContentView: View {
             Divider()
             footer
         }
-        .frame(width: 420)
+        .frame(width: 560)
     }
 
     private var header: some View {
@@ -85,7 +85,7 @@ struct MenuContentView: View {
                 }
             }
         }
-        .frame(maxHeight: 420)
+        .frame(maxHeight: 640)
     }
 
     private var emptyState: some View {
@@ -163,7 +163,7 @@ private struct ItemRow: View {
                 .frame(width: 18)
                 .padding(.top, 1)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(item.repo)
                         .font(.system(size: 12, weight: .semibold))
@@ -184,16 +184,16 @@ private struct ItemRow: View {
                 }
                 if let subtitle = item.subtitle {
                     Text(subtitle)
-                        .font(.system(size: 11))
+                        .font(.system(size: 12))
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .lineLimit(4)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let waiting = item.waitingOn {
                     Text(waiting)
-                        .font(.system(size: 11))
+                        .font(.system(size: 12))
                         .foregroundStyle(.primary.opacity(0.75))
-                        .lineLimit(2)
+                        .lineLimit(4)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -210,11 +210,11 @@ private struct ItemRow: View {
             .help("Mark read")
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.vertical, 10)
         .background(isHovered ? Color.primary.opacity(0.06) : .clear)
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
-        .onTapGesture { model.open(item) }
-        .help(item.cwd.map { "Open \($0)" } ?? "")
+        .onTapGesture { model.store.markRead(item.id) }
+        .help(item.cwd ?? "")
     }
 }

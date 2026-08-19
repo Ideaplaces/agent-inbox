@@ -5,15 +5,12 @@ import UserNotifications
 /// notification about an agent: go to it, or acknowledge it.
 enum Notifier {
     static let categoryID = "AGENT_INBOX_ITEM"
-    static let openAction = "OPEN_SESSION"
     static let readAction = "MARK_READ"
 
     static func registerCategories() {
-        let open = UNNotificationAction(
-            identifier: openAction, title: "Open Session", options: [.foreground])
         let read = UNNotificationAction(identifier: readAction, title: "Mark Read", options: [])
         let category = UNNotificationCategory(
-            identifier: categoryID, actions: [open, read], intentIdentifiers: [], options: [])
+            identifier: categoryID, actions: [read], intentIdentifiers: [], options: [])
         UNUserNotificationCenter.current().setNotificationCategories([category])
     }
 
