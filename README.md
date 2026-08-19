@@ -9,45 +9,55 @@ If you run several Claude Code sessions in parallel (some local, some over SSH o
 - 🧵 **Context on every message** — what the conversation is about and what you last asked, so a ping from a two-day-old session still rings the right bell
 - 📌 **Sticky menubar inbox** — a `🖐️2 ✅3` badge that stays until you mark it read. Go for coffee, come back, see who's waiting.
 
-It's about 700 lines of bash. No server to run, no service to sign up for, no account required: two `brew install`s on the Mac and you're done.
+A native menubar app on the Mac, plain bash on every machine that sends. No server to run, no service to sign up for, no account required.
 
 ```
-senders (Claude Code hooks)         transport                surface (your Mac)
-───────────────────────────   ────────────────────   ─────────────────────────────
-laptop sessions   ─ notify.sh ─┐   ntfy.sh topic    ┌─ popup (terminal-notifier)
+senders (Claude Code hooks)         transport              surface (your Mac)
+───────────────────────────   ────────────────────   ─────────────────────────
+laptop sessions   ─ notify.sh ─┐   ntfy.sh topic    ┌─ native notifications
 dev-box sessions  ─ notify.sh ─┼─→      or         ─┤
-any other machine ─ notify.sh ─┘   Discord channel  └─ menubar badge (SwiftBar)
+any other machine ─ notify.sh ─┘   Discord channel  └─ menubar inbox
 ```
 
-## Quickstart (ntfy — 2 minutes, no accounts)
+## Quickstart
 
-[ntfy.sh](https://ntfy.sh) is a free, open-source pub/sub notification service. There's no signup, no bot, no webhook: a channel is just a topic name you invent. Anyone who knows the topic can read it, **so generate a long random one** — it's effectively the password.
+**On your Mac**, download the latest `AgentInbox.dmg` from
+[Releases](https://github.com/Ideaplaces/agent-inbox/releases), drag Agent Inbox to
+Applications, and open it. The setup window walks you through three things: pick a
+transport, wire up this Mac, and copy the one-line command for your other machines.
+Nothing to clone, no dependencies to install.
+
+Prefer to build it yourself? See [mac/README.md](mac/README.md) — it is `./mac/build.sh`
+and a Swift toolchain.
+
+**On every other machine** where Claude Code runs, including a dev box you only reach
+over SSH, paste the command the app gives you:
 
 ```bash
-git clone https://github.com/Ideaplaces/agent-inbox.git && cd agent-inbox
-
-TOPIC="agent-inbox-$(whoami)-$(openssl rand -hex 8)"   # keep this string safe
-echo $TOPIC
-
-./install.sh --ntfy $TOPIC                # on EVERY machine where Claude Code runs
-                                          # (over SSH too: clone + run there as well)
-
-brew install terminal-notifier && brew install --cask swiftbar
-./install-mac-watcher.sh --ntfy $TOPIC    # on the Mac that should get notified
+curl -fsSL https://raw.githubusercontent.com/Ideaplaces/agent-inbox/main/install-remote.sh \
+  | bash -s -- --ntfy <your-topic> --host-label <ssh-host-alias>
 ```
 
-**On every machine that isn't the Mac, set `HOST_LABEL` to that machine's SSH host
-alias.** That is the name you type after `ssh`, as it appears in your Mac's `~/.ssh/config`:
+Set `--host-label` to that machine's SSH host alias. It is what lets the Mac open a
+remote session in VS Code over Remote-SSH when you click it.
 
-```bash
-echo 'HOST_LABEL="devbox"' >> ~/.agent-inbox/config   # run this ON the dev box
-```
+Restart any running Claude Code sessions to pick up the hooks.
 
-It defaults to the machine's own hostname, which is usually *not* an alias your Mac
-knows. The label is what click-to-open feeds to VS Code's Remote-SSH, so if it isn't a
-real alias, clicking an item does nothing.
+### Choosing a transport
 
-Restart any running Claude Code sessions to pick up the hooks. Want phone push too? Install the ntfy iOS/Android app and subscribe to the same topic.
+[ntfy.sh](https://ntfy.sh) is a free, open-source pub/sub service. There is no signup, no
+bot, no webhook: a channel is just a topic name you invent. Anyone who knows the topic can
+read it, **so the app generates a long random one** — it is effectively the password.
+
+Discord is slightly more setup and gives you a browsable channel history that doubles as a
+catch-up inbox, plus phone push through the Discord app. See
+[Discord setup](#alternative-transport-discord).
+
+### Shell-only install (no Mac app)
+
+The senders are plain bash and work without the app. Use `./install.sh --ntfy <topic>`
+from a clone if you want the hooks and nothing else, and read the transport's own history
+as your inbox.
 
 ## What you get
 
@@ -113,29 +123,49 @@ IDLE_THRESHOLD=90               # menubar: seconds of no input before you count 
 NTFY_SERVER="https://ntfy.sh"   # self-hosted ntfy instance
 ```
 
-Runtime state lives in `~/.agent-inbox/`: transport config (`ntfy-topic`, `webhook-url`, `bot-token`, `channel-id`, `guild-id`, `user`), cursors (`last-id`, `ntfy-cursor`), `state/<session>.start` (turn timers), `presence` (seconds clocked at the keyboard), `unread.log` (menubar inbox), `read-archive.log` (what you marked read), `watcher.log`.
+Runtime state lives in `~/.agent-inbox/`: `bin/notify.sh` (unpacked from the app), transport config for the senders (`ntfy-topic`, `webhook-url`, `channel-id`, `guild-id`), `state/<session>.start` (turn timers), `presence` (seconds clocked at the keyboard), and `items.json` (the inbox).
 
 ## Requirements
 
-- **Senders** (any OS Claude Code runs on): `bash`, `jq`, `curl` (plus `openssl` if you generate the topic the way the Quickstart does)
-- **Mac surface**: macOS, [terminal-notifier](https://github.com/julienXX/terminal-notifier), [SwiftBar](https://swiftbar.app) (both `brew install`), plus `jq`/`curl`
+- **Senders** (any OS Claude Code runs on): `bash`, `jq`, `curl`
+- **Mac app**: macOS 14 or newer. Nothing else.
 
 ## How it works
 
-`install.sh` merges three hooks into `~/.claude/settings.json` (idempotent, backs the file up first). On `Stop` and `Notification`, `notify.sh` reads the session transcript, extracts the context lines, and posts to your transport. On the Mac, `watch-mac.sh` runs as a launchd agent, polls the transport, raises a native notification, and appends to `unread.log`, which the SwiftBar plugin renders as the sticky menubar inbox.
+The app installs three hooks into `~/.claude/settings.json` (idempotent, and it backs the
+file up first). On `Stop` and `Notification`, `notify.sh` reads the session transcript,
+extracts the context lines, and posts to your transport. The Mac app polls that transport,
+raises a native notification, and keeps the item in the menubar inbox until you read it or
+until it ages out.
 
-Uninstall: remove the three `agent-inbox` entries from `~/.claude/settings.json` (the installer left the original at `~/.claude/settings.json.bak.agent-inbox`), then on the Mac:
+`notify.sh` ships inside the app bundle and is unpacked to `~/.agent-inbox/bin/notify.sh`,
+so the hooks keep working when the app is moved, updated, or quit. Secrets the app owns
+(bot token, webhook URL) live in the login Keychain rather than on disk; the sender-side
+settings stay mirrored into `~/.agent-inbox/config` because the hooks are still bash.
+
+Uninstall: **Settings → Machines → Remove** takes the hooks back out (the original file is
+kept at `~/.claude/settings.json.bak.agent-inbox`), then quit the app, drag it to the
+Trash, and `rm -rf ~/.agent-inbox/`.
+
+### Upgrading from the shell-only watcher
+
+The app adopts an existing `~/.agent-inbox/` install on first launch: same transport, same
+host label, same settings, nothing to retype. Your previous `config` is kept at
+`config.bak.agent-inbox`. Then retire the old surface:
 
 ```bash
 launchctl unload ~/Library/LaunchAgents/com.agent-inbox.watcher.plist
 rm ~/Library/LaunchAgents/com.agent-inbox.watcher.plist
 rm "$(defaults read com.ameba.SwiftBar PluginDirectory)/agent-inbox.5s.sh"   # plugin symlink
-rm -rf ~/.agent-inbox/
 ```
+
+Installing hooks from the app replaces any hook pointing at an older `notify.sh`, so you
+never get two copies of every event.
 
 ## Roadmap
 
-A richer Mac client: per-item read state, collapsing (a ✅ retiring an earlier 🖐️ from the same session), and cloud/remote agents in the same inbox.
+Collapsing (a ✅ retiring an earlier 🖐️ from the same session), and cloud/remote agents in
+the same inbox.
 
 ## License
 
