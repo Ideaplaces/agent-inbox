@@ -28,7 +28,8 @@ APP="$ROOT/build/Agent Inbox.app"
 CONTENTS="$APP/Contents"
 
 echo "==> Building AgentInbox ($CONFIG, v$VERSION build $BUILD_NUMBER)"
-swift build -c "$CONFIG" "${ARCH_ARGS[@]+"${ARCH_ARGS[@]}"}"
+RPATH=(-Xlinker -rpath -Xlinker @executable_path/../Frameworks)
+swift build -c "$CONFIG" "${ARCH_ARGS[@]+"${ARCH_ARGS[@]}"}" "${RPATH[@]}"
 BIN="$(swift build -c "$CONFIG" "${ARCH_ARGS[@]+"${ARCH_ARGS[@]}"}" --show-bin-path)/AgentInbox"
 [ -f "$BIN" ] || { echo "binary not found at $BIN" >&2; exit 1; }
 
@@ -52,6 +53,14 @@ cp Resources/AppIcon.icns "$CONTENTS/Resources/AppIcon.icns"
 cp "$REPO/notify.sh" "$CONTENTS/Resources/notify.sh"
 chmod +x "$CONTENTS/Resources/notify.sh"
 
+# Sparkle ships as an xcframework in the SPM artifact cache. Take the
+# universal macOS slice so a universal app stays universal.
+SPARKLE_SRC=".build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+[ -d "$SPARKLE_SRC" ] || { echo "Sparkle.framework not found at $SPARKLE_SRC" >&2; exit 1; }
+mkdir -p "$CONTENTS/Frameworks"
+# -R preserves the version symlinks the framework needs at runtime.
+cp -R "$SPARKLE_SRC" "$CONTENTS/Frameworks/Sparkle.framework"
+
 sed -e "s/__VERSION__/$VERSION/" -e "s/__BUILD__/$BUILD_NUMBER/" \
   Resources/Info.plist > "$CONTENTS/Info.plist"
 printf 'APPL????' > "$CONTENTS/PkgInfo"
@@ -63,13 +72,32 @@ IDENTITY="${SIGN_IDENTITY:--}"
 # signing with a real identity.
 if [ "$IDENTITY" = "-" ]; then
   TIMESTAMP=--timestamp=none
+  # See the comment in the dev entitlements: an ad-hoc signature has no Team
+  # ID, so library validation would refuse to load Sparkle.framework.
+  ENTITLEMENTS=Resources/AgentInbox-dev.entitlements
 else
   TIMESTAMP=--timestamp
+  ENTITLEMENTS=Resources/AgentInbox.entitlements
 fi
-codesign --force --deep --options runtime "$TIMESTAMP" \
-  --entitlements Resources/AgentInbox.entitlements \
+# Signing runs inner-out. `--deep` is deprecated and signs nested code with
+# the wrong identity and no entitlements, which notarization rejects.
+SPARKLE="$CONTENTS/Frameworks/Sparkle.framework/Versions/B"
+for nested in \
+  "$SPARKLE/XPCServices/Downloader.xpc" \
+  "$SPARKLE/XPCServices/Installer.xpc" \
+  "$SPARKLE/Updater.app" \
+  "$SPARKLE/Autoupdate"
+do
+  [ -e "$nested" ] || continue
+  codesign --force --options runtime "$TIMESTAMP" --sign "$IDENTITY" "$nested"
+done
+codesign --force --options runtime "$TIMESTAMP" --sign "$IDENTITY" \
+  "$CONTENTS/Frameworks/Sparkle.framework"
+codesign --force --options runtime "$TIMESTAMP" \
+  --entitlements "$ENTITLEMENTS" \
   --sign "$IDENTITY" "$APP"
-codesign --verify --verbose=2 "$APP" 2>&1 | sed 's/^/    /'
+
+codesign --verify --deep --strict --verbose=2 "$APP" 2>&1 | sed 's/^/    /'
 
 echo
 echo "Built: $APP"

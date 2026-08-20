@@ -42,6 +42,26 @@ private struct GeneralSettings: View {
                 }
             }
 
+            Section("Updates") {
+                Toggle("Check for updates automatically",
+                       isOn: Binding(
+                        get: { model.updater.automaticallyChecks },
+                        set: { model.updater.automaticallyChecks = $0 }))
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Version \(model.updater.currentVersion)")
+                        if let last = model.updater.lastCheck {
+                            Text("Last checked \(last.formatted(date: .abbreviated, time: .shortened))")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Button("Check Now") { model.updater.checkForUpdates() }
+                        .disabled(!model.updater.canCheck)
+                }
+            }
+
             Section("Inbox") {
                 LabeledContent("Clear items after") {
                     HStack {

@@ -14,6 +14,13 @@
   <!-- Menubar app: no Dock icon, no app switcher entry. -->
   <key>LSUIElement</key>                   <true/>
   <key>NSHumanReadableCopyright</key>      <string>MIT licensed. github.com/Ideaplaces/agent-inbox</string>
+  <!-- Sparkle. The public key is the whole trust model: an update is only
+       installed if it carries an EdDSA signature made by the matching private
+       key, so a compromised appcast host cannot ship anything. -->
+  <key>SUFeedURL</key>                     <string>https://raw.githubusercontent.com/Ideaplaces/agent-inbox/main/appcast.xml</string>
+  <key>SUPublicEDKey</key>                 <string>s0vtPzCjf+J65V39PmHHahzfK1G9Fc1p/uX88w6exow=</string>
+  <key>SUEnableAutomaticChecks</key>       <true/>
+  <key>SUScheduledCheckInterval</key>      <integer>86400</integer>
   <key>NSSupportsAutomaticTermination</key><false/>
   <key>NSSupportsSuddenTermination</key>   <false/>
 </dict>

@@ -11,6 +11,9 @@
 #   NOTARY_KEY=AuthKey.p8 NOTARY_KEY_ID=... NOTARY_ISSUER=...   App Store Connect API key
 #   NOTARY_APPLE_ID=you@example.com NOTARY_TEAM_ID=... NOTARY_PASSWORD=...   app-specific password
 #
+# Sparkle appcast (optional):
+#   SPARKLE_KEY=<path to the EdDSA private key>   writes and signs ../appcast.xml
+#
 # Without notarization Gatekeeper shows "cannot be opened because the developer
 # cannot be verified" on another Mac. Notarize anything you hand to someone.
 set -euo pipefail
@@ -82,6 +85,28 @@ else
 fi
 
 rm -rf "$STAGE"
+
+# The appcast is what makes the app able to update itself. The EdDSA signature
+# in it is the trust anchor: the app only installs an update whose signature
+# matches SUPublicEDKey in its own Info.plist, so publishing the feed on an
+# untrusted host is still safe.
+if [ -n "${SPARKLE_KEY:-}" ]; then
+  echo "==> Generating the Sparkle appcast"
+  TOOLS=".build/artifacts/sparkle/Sparkle/bin"
+  [ -x "$TOOLS/generate_appcast" ] || { echo "Sparkle tools missing; run swift build first" >&2; exit 1; }
+  FEED_DIR="$(mktemp -d)"
+  cp "$DMG" "$FEED_DIR/"
+  "$TOOLS/generate_appcast" \
+    --ed-key-file "$SPARKLE_KEY" \
+    --download-url-prefix "https://github.com/Ideaplaces/agent-inbox/releases/download/v$VERSION/" \
+    --link "https://github.com/Ideaplaces/agent-inbox" \
+    --maximum-versions 0 \
+    -o ../appcast.xml \
+    "$FEED_DIR"
+  rm -rf "$FEED_DIR"
+  echo "    wrote appcast.xml"
+fi
+
 echo
 echo "Built: $DMG"
 shasum -a 256 "$DMG"
