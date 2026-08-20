@@ -23,7 +23,19 @@ for arg in "$@"; do
 done
 
 VERSION="$(cat VERSION)"
-BUILD_NUMBER="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
+
+# Sparkle decides whether an update exists by comparing CFBundleVersion, so it
+# has to increase with every release and must not depend on the environment.
+# It used to be `git rev-list --count HEAD`, which is 1 on CI because
+# actions/checkout does a depth-1 clone: every release shipped build 1, so no
+# installed copy could ever see a newer one. Deriving it from VERSION makes it
+# a pure function of the release, identical locally and in CI.
+BUILD_NUMBER="$(
+  IFS=. read -r major minor patch <<EOF
+$VERSION
+EOF
+  printf '%d' $(( ${major:-0} * 1000000 + ${minor:-0} * 1000 + ${patch:-0} ))
+)"
 APP="$ROOT/build/Agent Inbox.app"
 CONTENTS="$APP/Contents"
 
