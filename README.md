@@ -133,6 +133,38 @@ work the list stays short instead of piling into noise. The clock stops when you
 so a coffee-break backlog is still waiting when you get back, and only starts draining once
 you are. Set it to `Never` to keep everything until you hit Mark All Read.
 
+## Choosing which conversations report
+
+By default every conversation reports. Twenty sessions open and one you actually
+care about is a different problem, so a conversation can be tagged from inside
+itself. Type any of these anywhere in a message:
+
+| You type | Effect |
+|---|---|
+| `#notify`, `#inbox`, `#watch`, `#agent-inbox` | This conversation reports |
+| `#mute` | This conversation goes quiet |
+
+The most recent tag wins, so you can flip a conversation on and off as often as
+you like, and it works on a conversation that is already running. Nothing else
+to remember: no session ids, no separate command.
+
+**Settings → Inbox → Report** switches the default:
+
+- **Every conversation.** Everything reports, and `#mute` silences the noisy one.
+- **Only tagged conversations.** Silence until you tag one. This is the setting
+  for "I have twenty open and want one of them."
+
+The mode is per machine, so a dev box can stay quiet while your laptop reports
+everything.
+
+It costs nothing to check. The hook that fires when you submit a prompt is handed
+the text you typed, so the tag is read from that and the answer is remembered per
+session. A transcript can be tens of megabytes and is never opened for this.
+
+The match is a plain substring, so a tag inside pasted code counts too. That is a
+deliberate choice: nobody is harmed by a conversation they did not mean to watch,
+and the alternative is parsing that gets clever and then gets it wrong.
+
 ## Your conversation content travels through the transport
 
 Notification bodies include snippets of your prompts and Claude's replies, plus repo names
@@ -187,6 +219,7 @@ The app owns its own settings, in **Settings**. The only file you might touch is
 
 ```bash
 MIN_SECONDS=45                  # ignore turns shorter than this
+WATCH_MODE=all                  # or "tagged": report only tagged conversations
 HOST_LABEL="mac"                # machine name shown in messages
 NTFY_SERVER="https://ntfy.sh"   # a self-hosted ntfy instance
 ```

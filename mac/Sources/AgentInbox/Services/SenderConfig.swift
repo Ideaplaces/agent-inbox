@@ -11,6 +11,7 @@ struct SenderSnapshot {
     var discordGuildID: String = ""
     var minSeconds: Int = 45
     var hostLabel: String = "mac"
+    var watchMode: String = "all"
 }
 
 /// `~/.agent-inbox/` is the contract between this app and the shell senders.
@@ -97,6 +98,7 @@ enum SenderConfig {
         var lines = [
             "\(marker) Sender-side settings for notify.sh.",
             "MIN_SECONDS=\(settings.minSeconds)",
+            "WATCH_MODE=\(settings.watchMode)",
             "HOST_LABEL=\"\(settings.hostLabel)\"",
         ]
         if settings.transport == .ntfy, settings.ntfyServer != "https://ntfy.sh" {

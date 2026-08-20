@@ -43,6 +43,9 @@ jobs:
       - name: Lint
         run: shellcheck --severity=warning *.sh mac/*.sh
 
+      - name: Sender tests
+        run: ./test-notify.sh
+
   notify:
     name: Notify on failure
     needs: [mac-app, shell]
