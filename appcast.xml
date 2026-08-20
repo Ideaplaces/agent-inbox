@@ -1,0 +1,15 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Agent Inbox</title>
+        <item>
+            <title>0.1.1</title>
+            <pubDate>Thu, 20 Aug 2026 00:53:56 +0000</pubDate>
+            <link>https://github.com/Ideaplaces/agent-inbox</link>
+            <sparkle:version>1</sparkle:version>
+            <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/Ideaplaces/agent-inbox/releases/download/v0.1.1/AgentInbox-0.1.1.dmg" length="2557111" type="application/octet-stream" sparkle:edSignature="vnd7OoK9ubQbk9bPaRvsLXArwHobC5UCNIVkvX6hU2wxzDHXpK3h3kGxxgwpjH8x92kLb1IQejjQa+s8A7i8Cw=="/>
+        </item>
+    </channel>
+</rss>
