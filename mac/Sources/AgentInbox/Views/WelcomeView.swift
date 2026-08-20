@@ -149,12 +149,19 @@ struct TransportPicker: View {
 
         VStack(alignment: .leading, spacing: 10) {
             Picker("", selection: $settings.transport) {
-                Text("ntfy (no account)").tag(TransportKind.ntfy)
+                Text("ntfy").tag(TransportKind.ntfy)
                 Text("Discord").tag(TransportKind.discord)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .onChange(of: settings.transport) { _, _ in model.poller.restart() }
+
+            Text(settings.transport == .discord
+                 ? "A private channel keeps a browsable history you can scroll back through, at the cost of a bot and a webhook to set up."
+                 : "Recommended. No account, no bot, nothing to provision. Messages are cached for about 12 hours, so the menubar is your history rather than the feed.")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             switch settings.transport {
             case .ntfy, .none:
@@ -164,7 +171,7 @@ struct TransportPicker: View {
                             .textFieldStyle(.roundedBorder)
                             .font(.system(size: 11, design: .monospaced))
                         Button("Generate") {
-                            settings.ntfyTopic = Self.randomTopic()
+                            settings.ntfyTopic = AppSettings.randomNtfyTopic()
                             settings.transport = .ntfy
                             model.poller.restart()
                         }
@@ -210,13 +217,4 @@ struct TransportPicker: View {
         }
     }
 
-    /// Long enough that guessing it is not a threat model.
-    static func randomTopic() -> String {
-        let user = NSUserName().lowercased()
-            .filter { $0.isLetter || $0.isNumber }
-        var bytes = [UInt8](repeating: 0, count: 12)
-        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
-        let hex = bytes.map { String(format: "%02x", $0) }.joined()
-        return "agent-inbox-\(user.isEmpty ? "user" : user)-\(hex)"
-    }
 }

@@ -1,5 +1,9 @@
 import Foundation
 import Observation
+import Security
+#if canImport(AppKit)
+import AppKit
+#endif
 
 enum TransportKind: String, CaseIterable, Identifiable {
     case none
@@ -89,6 +93,9 @@ final class AppSettings {
             "soundName": "",
         ])
         transport = TransportKind(rawValue: defaults.string(forKey: "transport") ?? "") ?? .none
+        // ntfy is the default because it needs no account, no bot, and no
+        // channel to provision: the topic name is the whole channel. Discord
+        // is the deliberate choice you make when you want a durable archive.
         ntfyServer = defaults.string(forKey: "ntfyServer") ?? "https://ntfy.sh"
         ntfyTopic = defaults.string(forKey: "ntfyTopic") ?? ""
         discordChannelID = defaults.string(forKey: "discordChannelID") ?? ""
@@ -102,6 +109,16 @@ final class AppSettings {
         minSeconds = defaults.integer(forKey: "minSeconds")
         hostLabel = defaults.string(forKey: "hostLabel") ?? Host.current().localizedName ?? "mac"
         hasCompletedOnboarding = defaults.bool(forKey: "hasCompletedOnboarding")
+    }
+
+    /// The topic is the only secret protecting message bodies, so it has to be
+    /// long enough that guessing it is not a threat model.
+    nonisolated static func randomNtfyTopic() -> String {
+        let user = NSUserName().lowercased().filter { $0.isLetter || $0.isNumber }
+        var bytes = [UInt8](repeating: 0, count: 12)
+        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        let hex = bytes.map { String(format: "%02x", $0) }.joined()
+        return "agent-inbox-\(user.isEmpty ? "user" : user)-\(hex)"
     }
 
     var isConfigured: Bool {

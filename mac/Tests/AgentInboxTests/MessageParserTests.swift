@@ -4,6 +4,21 @@ import XCTest
 /// The wire format is a contract with `notify.sh`. If these break, the app
 /// silently shows blank rows, so they are the first thing to protect.
 final class MessageParserTests: XCTestCase {
+    func testGeneratedTopicsAreUnguessableAndUnique() {
+        let a = AppSettings.randomNtfyTopic()
+        let b = AppSettings.randomNtfyTopic()
+        XCTAssertNotEqual(a, b, "a fixed topic would put every user on one channel")
+        XCTAssertTrue(a.hasPrefix("agent-inbox-"))
+        // The topic is the only secret protecting message bodies, so the
+        // random tail has to be long: 12 bytes as hex.
+        let tail = a.split(separator: "-").last.map(String.init) ?? ""
+        XCTAssertEqual(tail.count, 24, "expected 24 hex chars, got \(tail)")
+        XCTAssertTrue(tail.allSatisfy { $0.isHexDigit })
+        // ntfy topics are used in a URL path.
+        XCTAssertTrue(a.allSatisfy { $0.isLetter || $0.isNumber || $0 == "-" }, a)
+    }
+
+
     func testParsesFinishedTitleWithDuration() throws {
         let head = try XCTUnwrap(MessageParser.parseTitle("✅ ideaplaces-devops @ mac (4m 19s)"))
         XCTAssertEqual(head.kind, .finished)
