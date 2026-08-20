@@ -22,6 +22,9 @@ mkdir -p "$STATE_DIR" 2>/dev/null
 # Config (optional): MIN_SECONDS, HOST_LABEL
 MIN_SECONDS=45
 HOST_LABEL="$(hostname -s)"
+# all    every session reports, and #mute silences one
+# tagged nothing reports until a tag turns it on
+WATCH_MODE=all
 [ -f "$CONF_DIR/config" ] && . "$CONF_DIR/config"
 
 INPUT="$(cat)"
@@ -30,6 +33,49 @@ CWD="$(printf '%s' "$INPUT" | jq -r '.cwd // empty')"
 TRANSCRIPT="$(printf '%s' "$INPUT" | jq -r '.transcript_path // empty')"
 REPO="$(basename "${CWD:-unknown}")"
 NOW="$(date +%s)"
+
+# --- Per-conversation opt in and out ---
+#
+# Typing #notify (or #inbox, #watch, #agent-inbox) in a conversation makes it
+# report; #mute silences it. The most recent tag wins, so a session can be
+# flipped as often as you like.
+#
+# There is nothing to scan. The UserPromptSubmit hook is handed the prompt
+# text, so the tag is read straight off what you typed and the answer is
+# remembered per session. A transcript can be tens of megabytes; it is never
+# opened for this.
+#
+# Deliberately a plain substring match. A tag inside pasted code counts, and
+# that is fine: nobody is harmed by a conversation they did not mean to watch,
+# and the alternative is parsing that gets clever and then gets it wrong.
+WATCH_FILE="$STATE_DIR/${SESSION_ID}.watch"
+ON_TAGS='#notify #inbox #watch #agent-inbox'
+OFF_TAG='#mute'
+
+record_tags() { # $1 = the text the user just submitted
+  local text="$1" tag
+  [ -n "$SESSION_ID" ] || return 0
+  case "$text" in
+    *"$OFF_TAG"*) printf 'off' > "$WATCH_FILE"; return 0 ;;
+  esac
+  for tag in $ON_TAGS; do
+    case "$text" in
+      *"$tag"*) printf 'on' > "$WATCH_FILE"; return 0 ;;
+    esac
+  done
+}
+
+# Should this session report? Sessions with no tag follow WATCH_MODE.
+should_report() {
+  local state=""
+  [ -n "$SESSION_ID" ] && [ -f "$WATCH_FILE" ] && state="$(cat "$WATCH_FILE")"
+  case "$state" in
+    on)  return 0 ;;
+    off) return 1 ;;
+  esac
+  [ "$WATCH_MODE" = "tagged" ] && return 1
+  return 0
+}
 
 # Last non-empty assistant text in the transcript. fromjson? tolerates the
 # line tail may have truncated and skips tool-call-only entries.
@@ -72,6 +118,7 @@ case "$KIND" in
   prompt)
     # Record when the user handed work to the agent; used to skip quick turns.
     [ -n "$SESSION_ID" ] && printf '%s' "$NOW" > "$STATE_DIR/$SESSION_ID.start"
+    record_tags "$(printf '%s' "$INPUT" | jq -r '.prompt // empty')"
     exit 0
     ;;
 
@@ -120,6 +167,18 @@ $SNIPPET"
     exit 0
     ;;
 esac
+
+# A muted conversation, or an untagged one in tagged mode, stops here. The turn
+# timer and the tag state are already recorded, so muting and unmuting mid
+# conversation works without leaving anything stale behind.
+should_report || exit 0
+
+# AGENT_INBOX_DRY_RUN prints what would be sent instead of sending it, which is
+# what makes the sender testable without a live transport.
+if [ -n "${AGENT_INBOX_DRY_RUN:-}" ]; then
+  printf 'WOULD SEND\ntitle: %s\nbody: %s\nfooter: %s\n' "$TITLE" "$BODY" "$FOOTER"
+  exit 0
+fi
 
 # --- Transports: whichever is configured gets the event (both is fine) ---
 

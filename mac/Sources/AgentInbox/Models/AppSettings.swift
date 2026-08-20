@@ -70,6 +70,13 @@ final class AppSettings {
     var soundName: String {
         didSet { defaults.set(soundName, forKey: "soundName") }
     }
+    /// Sender-side: "all" reports every conversation and lets #mute silence
+    /// one; "tagged" stays quiet until a conversation is tagged. Owned here
+    /// because the app rewrites the sender config wholesale, so a key it does
+    /// not know about would be erased on the next change.
+    var watchMode: String {
+        didSet { defaults.set(watchMode, forKey: "watchMode"); sync() }
+    }
     /// Sender-side: turns shorter than this never reach the inbox.
     var minSeconds: Int {
         didSet { defaults.set(minSeconds, forKey: "minSeconds"); sync() }
@@ -90,6 +97,7 @@ final class AppSettings {
             "expireMinutes": 5,
             "idleThreshold": 90,
             "minSeconds": 45,
+            "watchMode": "all",
             "soundName": "",
         ])
         transport = TransportKind(rawValue: defaults.string(forKey: "transport") ?? "") ?? .none
@@ -107,6 +115,7 @@ final class AppSettings {
         idleThreshold = defaults.integer(forKey: "idleThreshold")
         soundName = defaults.string(forKey: "soundName") ?? ""
         minSeconds = defaults.integer(forKey: "minSeconds")
+        watchMode = defaults.string(forKey: "watchMode") ?? "all"
         hostLabel = defaults.string(forKey: "hostLabel") ?? Host.current().localizedName ?? "mac"
         hasCompletedOnboarding = defaults.bool(forKey: "hasCompletedOnboarding")
     }
@@ -161,7 +170,8 @@ final class AppSettings {
             discordChannelID: discordChannelID,
             discordGuildID: discordGuildID,
             minSeconds: minSeconds,
-            hostLabel: hostLabel)
+            hostLabel: hostLabel,
+            watchMode: watchMode)
     }
 
     /// Take over an existing bash install without making the user retype it.
@@ -193,6 +203,7 @@ final class AppSettings {
             case "MIN_SECONDS": minSeconds = Int(value) ?? minSeconds
             case "NOTIFY_SOUND": soundName = value
             case "HOST_LABEL": if !value.isEmpty { hostLabel = value }
+            case "WATCH_MODE": if value == "all" || value == "tagged" { watchMode = value }
             case "NTFY_SERVER": if !value.isEmpty { ntfyServer = value }
             default: break
             }

@@ -91,6 +91,13 @@ private struct GeneralSettings: View {
                     }
                     .onChange(of: settings.pollSeconds) { _, _ in model.poller.restart() }
                 }
+                Picker("Report", selection: $settings.watchMode) {
+                    Text("Every conversation").tag("all")
+                    Text("Only tagged conversations").tag("tagged")
+                }
+                Text("Type #notify, #inbox, #watch or #agent-inbox in a conversation to have it report, and #mute to silence it. The most recent tag wins. Applies on every machine that reads your config.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
                 LabeledContent("Ignore turns under") {
                     Stepper(value: $settings.minSeconds, in: 0...600, step: 15) {
                         Text("\(settings.minSeconds)s")

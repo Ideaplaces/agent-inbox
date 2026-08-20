@@ -41,6 +41,21 @@ final class SenderConfigTests: XCTestCase {
         XCTAssertEqual(pairs["WEBHOOK"], "https://example.com/a?b=c")
     }
 
+    func testWatchModeIsWrittenSoTheSenderCanSeeIt() throws {
+        // The app rewrites this file wholesale, so anything the senders read
+        // has to be a field here or it gets erased on the next change.
+        SenderConfig.write(SenderSnapshot(transport: .ntfy, ntfyTopic: "t", watchMode: "tagged"))
+        let written = try String(
+            contentsOf: tempDir.appendingPathComponent("config"), encoding: .utf8)
+        XCTAssertTrue(written.contains("WATCH_MODE=tagged"), written)
+    }
+
+    func testWatchModeRoundTripsFromAShellConfig() throws {
+        try writeConfig("WATCH_MODE=tagged\nMIN_SECONDS=30\n")
+        let pairs = Dictionary(uniqueKeysWithValues: SenderConfig.readShellConfig())
+        XCTAssertEqual(pairs["WATCH_MODE"], "tagged")
+    }
+
     func testHandWrittenConfigIsBackedUpOnceBeforeBeingReplaced() throws {
         try writeConfig("HOST_LABEL=\"mine\"\nCUSTOM=keepme\n")
         let settings = SenderSnapshot(transport: .ntfy, ntfyTopic: "t")
