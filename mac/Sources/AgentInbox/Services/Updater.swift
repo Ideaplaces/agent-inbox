@@ -47,10 +47,12 @@ final class Updater {
     /// Sparkle exposes this as KVO, not as a publisher.
     private func observeCanCheck() {
         canCheck = controller.updater.canCheckForUpdates
-        observation = controller.updater.observe(\.canCheckForUpdates, options: [.new]) {
-            [weak self] _, change in
+        // The weak capture belongs to the Task, not the observation closure:
+        // capturing it outside makes `self` a captured var that older
+        // toolchains refuse to read from concurrent code.
+        observation = controller.updater.observe(\.canCheckForUpdates, options: [.new]) { _, change in
             guard let value = change.newValue else { return }
-            Task { @MainActor in self?.canCheck = value }
+            Task { @MainActor [weak self] in self?.canCheck = value }
         }
     }
 
