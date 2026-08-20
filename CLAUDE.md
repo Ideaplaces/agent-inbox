@@ -110,6 +110,10 @@ docs.ideaplaces.com/devops/macos-app-signing.
   file that relaxes it; never ship that file.
 - **`hdiutil create -srcfolder` needs a writable mount.** Managed Macs and CI
   runners force disk images read-only. Use `makehybrid`.
+- **Apple's timestamp server fails under load.** `A timestamp was expected but
+  was not found.` broke the v0.1.5 release on a Sparkle XPC service. The
+  timestamp is mandatory for notarization, so signing retries with backoff
+  rather than failing the release.
 - **Test the binary you think you are testing.** A `--configure` flag appeared to
   hang through several rounds of debugging because `/Applications` held the
   released build, which predated the flag.

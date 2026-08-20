@@ -91,6 +91,27 @@ else
   TIMESTAMP=--timestamp
   ENTITLEMENTS=Resources/AgentInbox.entitlements
 fi
+# --timestamp reaches out to Apple's timestamp authority, which fails often
+# enough under load to break a release for no reason:
+#   "A timestamp was expected but was not found."
+# Notarization requires the timestamp, so the only options are to retry or to
+# ship unsignable builds. Retry.
+sign() {
+  local attempt=1
+  while true; do
+    if codesign --force --options runtime "$TIMESTAMP" "$@"; then
+      return 0
+    fi
+    if [ "$attempt" -ge 4 ]; then
+      echo "codesign failed 4 times for: ${*: -1}" >&2
+      return 1
+    fi
+    echo "    codesign attempt $attempt failed, retrying in $((attempt * 10))s" >&2
+    sleep $((attempt * 10))
+    attempt=$((attempt + 1))
+  done
+}
+
 # Signing runs inner-out. `--deep` is deprecated and signs nested code with
 # the wrong identity and no entitlements, which notarization rejects.
 SPARKLE="$CONTENTS/Frameworks/Sparkle.framework/Versions/B"
@@ -101,13 +122,10 @@ for nested in \
   "$SPARKLE/Autoupdate"
 do
   [ -e "$nested" ] || continue
-  codesign --force --options runtime "$TIMESTAMP" --sign "$IDENTITY" "$nested"
+  sign --sign "$IDENTITY" "$nested"
 done
-codesign --force --options runtime "$TIMESTAMP" --sign "$IDENTITY" \
-  "$CONTENTS/Frameworks/Sparkle.framework"
-codesign --force --options runtime "$TIMESTAMP" \
-  --entitlements "$ENTITLEMENTS" \
-  --sign "$IDENTITY" "$APP"
+sign --sign "$IDENTITY" "$CONTENTS/Frameworks/Sparkle.framework"
+sign --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$APP"
 
 codesign --verify --deep --strict --verbose=2 "$APP" 2>&1 | sed 's/^/    /'
 
