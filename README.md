@@ -54,12 +54,20 @@ Restart any running Claude Code sessions to pick up the hooks.
 
 ### Choosing a transport
 
+**ntfy is the default and you can ignore this section.** The app generates a long random
+topic on first launch and you are done.
+
 [ntfy.sh](https://ntfy.sh) is a free, open-source pub/sub service. There is no signup, no
 bot, no webhook: a channel is just a topic name you invent. Anyone who knows the topic can
-read it, **so the app generates a long random one** — it is effectively the password.
+read it, so the generated topic is effectively the password. Keep it private and never
+share it, including with a teammate: a shared topic means you each see the other's prompts
+and replies.
 
-Discord is slightly more setup and gives you a browsable channel history that doubles as a
-catch-up inbox, plus phone push through the Discord app. See
+The one thing ntfy does not give you is history. The public server caches messages for
+about 12 hours, so the menubar inbox is your record, not the feed.
+
+Choose **Discord** when you want a durable, browsable archive of every session, and phone
+push through an app you already run. It costs a bot and a webhook to set up. See
 [Discord setup](#alternative-transport-discord).
 
 ### Shell-only install (no Mac app)

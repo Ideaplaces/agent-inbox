@@ -29,6 +29,15 @@ final class AppModel {
         // Take over a previous bash install silently. Someone upgrading should
         // find the app already configured, not an empty setup screen.
         settings.adoptExistingShellInstall()
+        // Nothing to adopt means a fresh install. Land on ntfy with a topic
+        // already generated, so setup is three clicks and no decision. A
+        // half-configured ntfy (topic but no transport) is not possible.
+        if settings.transport == .none {
+            if settings.ntfyTopic.isEmpty {
+                settings.ntfyTopic = AppSettings.randomNtfyTopic()
+            }
+            settings.transport = .ntfy
+        }
         SenderConfig.installNotifyScript()
         settings.sync()
         poller.start()
