@@ -13,6 +13,7 @@ final class AppModel {
     let presence: Presence
     let store: InboxStore
     let poller: Poller
+    let updater = Updater()
 
     /// Shown in the menu when a background action has something to say.
     var transientMessage: String?

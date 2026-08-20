@@ -21,11 +21,20 @@ any other machine ─ notify.sh ─┘   Discord channel  └─ menubar inbox
 
 ## Quickstart
 
-**On your Mac**, download the latest `AgentInbox.dmg` from
-[Releases](https://github.com/Ideaplaces/agent-inbox/releases), drag Agent Inbox to
-Applications, and open it. The setup window walks you through three things: pick a
-transport, wire up this Mac, and copy the one-line command for your other machines.
-Nothing to clone, no dependencies to install.
+**On your Mac:**
+
+```bash
+brew install --cask ideaplaces/tap/agent-inbox
+```
+
+Or download the latest `AgentInbox.dmg` from
+[Releases](https://github.com/Ideaplaces/agent-inbox/releases) and drag it to Applications.
+Either way the app is signed and notarized, so it opens without a Gatekeeper warning, and
+it updates itself from then on.
+
+Open it and the setup window walks you through three things: pick a transport, wire up this
+Mac, and copy the one-line command for your other machines. Nothing to clone, no
+dependencies to install.
 
 Prefer to build it yourself? See [mac/README.md](mac/README.md) — it is `./mac/build.sh`
 and a Swift toolchain.
@@ -122,6 +131,14 @@ idle threshold) lives in the app's own Settings, and the app writes the keys abo
 two can never disagree.
 
 Runtime state lives in `~/.agent-inbox/`: `bin/notify.sh` (unpacked from the app), transport config for the senders (`ntfy-topic`, `webhook-url`, `channel-id`, `guild-id`), `state/<session>.start` (turn timers), `presence` (seconds clocked at the keyboard), and `items.json` (the inbox).
+
+## Updates
+
+The app checks for updates once a day and installs them itself
+([Sparkle](https://sparkle-project.org), EdDSA-signed). Turn it off in
+**Settings → Updates**, or check on demand from the menu.
+
+Installed with Homebrew? `brew upgrade --cask agent-inbox` works too; either path is fine.
 
 ## Requirements
 

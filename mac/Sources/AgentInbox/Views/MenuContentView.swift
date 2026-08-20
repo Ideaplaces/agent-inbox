@@ -130,6 +130,8 @@ struct MenuContentView: View {
                 Button("History") { model.openHistory() }
             }
             Spacer()
+            Button("Check for Updates") { model.updater.checkForUpdates() }
+                .disabled(!model.updater.canCheck)
             SettingsLink {
                 Image(systemName: "gearshape")
             }
