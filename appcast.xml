@@ -7,9 +7,9 @@
             <pubDate>Thu, 20 Aug 2026 00:53:56 +0000</pubDate>
             <link>https://github.com/Ideaplaces/agent-inbox</link>
             <sparkle:version>1</sparkle:version>
-            <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
+            <sparkle:shortVersionString>0.1.2</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/Ideaplaces/agent-inbox/releases/download/v0.1.1/AgentInbox-0.1.1.dmg" length="2557111" type="application/octet-stream" sparkle:edSignature="vnd7OoK9ubQbk9bPaRvsLXArwHobC5UCNIVkvX6hU2wxzDHXpK3h3kGxxgwpjH8x92kLb1IQejjQa+s8A7i8Cw=="/>
+            <enclosure url="https://github.com/Ideaplaces/agent-inbox/releases/download/v0.1.2/AgentInbox-0.1.2.dmg" length="2558368" type="application/octet-stream" sparkle:edSignature="gH6Kp4rx8R/na10FcnmHBDjCeMi79H6+XagUd2ZyV/riYYmXHvO8mM0AsGdhz8g2Vxf3iG2Y97G3/LiUrsgrBA=="/>
         </item>
     </channel>
 </rss>
