@@ -145,10 +145,14 @@ itself. Type any of these anywhere in a message:
 | `#mute` | This conversation goes quiet |
 
 The most recent tag wins, so you can flip a conversation on and off as often as
-you like, and it works on a conversation that is already running. Nothing else
-to remember: no session ids, no separate command.
+you like, and it works on a conversation that is already running. Case does not
+matter. Nothing else to remember: no session ids, no separate command.
 
-**Settings → Inbox → Report** switches the default:
+**The tags are yours to choose.** Change them in **Settings → Conversations**:
+several watch tags separated by spaces, one mute tag. Emptying the watch tags
+restores the defaults rather than leaving a silence nothing could escape.
+
+**Settings → Conversations → Report** switches the default:
 
 - **Every conversation.** Everything reports, and `#mute` silences the noisy one.
 - **Only tagged conversations.** Silence until you tag one. This is the setting
@@ -220,6 +224,8 @@ The app owns its own settings, in **Settings**. The only file you might touch is
 ```bash
 MIN_SECONDS=45                  # ignore turns shorter than this
 WATCH_MODE=all                  # or "tagged": report only tagged conversations
+WATCH_TAGS="#notify #inbox #watch #agent-inbox"   # tags that turn a conversation on
+MUTE_TAG="#mute"                # the tag that silences one
 HOST_LABEL="mac"                # machine name shown in messages
 NTFY_SERVER="https://ntfy.sh"   # a self-hosted ntfy instance
 ```

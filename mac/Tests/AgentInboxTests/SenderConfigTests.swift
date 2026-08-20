@@ -56,6 +56,34 @@ final class SenderConfigTests: XCTestCase {
         XCTAssertEqual(pairs["WATCH_MODE"], "tagged")
     }
 
+    func testTagsAreWrittenQuotedSoAShellCanReadThem() throws {
+        SenderConfig.write(SenderSnapshot(
+            transport: .ntfy, ntfyTopic: "t",
+            watchTags: "#ping #follow", muteTag: "#quiet"))
+        let written = try String(
+            contentsOf: tempDir.appendingPathComponent("config"), encoding: .utf8)
+        // Unquoted these would still parse, but quoting removes any doubt
+        // about a value that begins with the shell comment character.
+        XCTAssertTrue(written.contains("WATCH_TAGS=\"#ping #follow\""), written)
+        XCTAssertTrue(written.contains("MUTE_TAG=\"#quiet\""), written)
+    }
+
+    func testTagsRoundTripFromAShellConfig() throws {
+        try writeConfig("WATCH_TAGS=\"#ping #follow\"\nMUTE_TAG=\"#quiet\"\n")
+        let pairs = Dictionary(uniqueKeysWithValues: SenderConfig.readShellConfig())
+        XCTAssertEqual(pairs["WATCH_TAGS"], "#ping #follow")
+        XCTAssertEqual(pairs["MUTE_TAG"], "#quiet")
+    }
+
+    func testTagNormalizationTidiesWhatTheUserTyped() {
+        // Commas and stray whitespace are what people actually type; the
+        // sender splits on spaces, so store what it will split on.
+        XCTAssertEqual(
+            AppSettings.normalizeTags("  #ping,  #follow   #watch "),
+            "#ping #follow #watch")
+        XCTAssertEqual(AppSettings.normalizeTags("   "), "")
+    }
+
     func testHandWrittenConfigIsBackedUpOnceBeforeBeingReplaced() throws {
         try writeConfig("HOST_LABEL=\"mine\"\nCUSTOM=keepme\n")
         let settings = SenderSnapshot(transport: .ntfy, ntfyTopic: "t")

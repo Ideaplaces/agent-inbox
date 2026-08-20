@@ -22,9 +22,13 @@ mkdir -p "$STATE_DIR" 2>/dev/null
 # Config (optional): MIN_SECONDS, HOST_LABEL
 MIN_SECONDS=45
 HOST_LABEL="$(hostname -s)"
-# all    every session reports, and #mute silences one
-# tagged nothing reports until a tag turns it on
+# all    every session reports, and the mute tag silences one
+# tagged nothing reports until a watch tag turns it on
 WATCH_MODE=all
+# The tags themselves, so they can be changed without touching this script.
+# Space separated; matching ignores case.
+WATCH_TAGS="#notify #inbox #watch #agent-inbox"
+MUTE_TAG="#mute"
 [ -f "$CONF_DIR/config" ] && . "$CONF_DIR/config"
 
 INPUT="$(cat)"
@@ -49,18 +53,29 @@ NOW="$(date +%s)"
 # that is fine: nobody is harmed by a conversation they did not mean to watch,
 # and the alternative is parsing that gets clever and then gets it wrong.
 WATCH_FILE="$STATE_DIR/${SESSION_ID}.watch"
-ON_TAGS='#notify #inbox #watch #agent-inbox'
-OFF_TAG='#mute'
+
+# An empty watch list in tagged mode would be a silence nothing could escape,
+# so fall back to the defaults rather than leaving the inbox permanently dead.
+[ -n "${WATCH_TAGS// /}" ] || WATCH_TAGS="#notify #inbox #watch #agent-inbox"
 
 record_tags() { # $1 = the text the user just submitted
-  local text="$1" tag
+  local text tag
   [ -n "$SESSION_ID" ] || return 0
-  case "$text" in
-    *"$OFF_TAG"*) printf 'off' > "$WATCH_FILE"; return 0 ;;
-  esac
-  for tag in $ON_TAGS; do
+  # Matching ignores case: a tag that works only in lower case looks broken
+  # rather than strict.
+  text="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+
+  if [ -n "${MUTE_TAG// /}" ]; then
     case "$text" in
-      *"$tag"*) printf 'on' > "$WATCH_FILE"; return 0 ;;
+      *"$(printf '%s' "$MUTE_TAG" | tr '[:upper:]' '[:lower:]')"*)
+        printf 'off' > "$WATCH_FILE"; return 0 ;;
+    esac
+  fi
+
+  for tag in $WATCH_TAGS; do
+    case "$text" in
+      *"$(printf '%s' "$tag" | tr '[:upper:]' '[:lower:]')"*)
+        printf 'on' > "$WATCH_FILE"; return 0 ;;
     esac
   done
 }

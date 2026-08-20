@@ -92,5 +92,60 @@ printf '{"session_id":"%s","cwd":"/tmp/repo"}' "$SID" \
   && ok "a prompt with no text records no decision" \
   || fail "a prompt with no text records no decision" "state file was written"
 
+# --- the tags themselves are configurable ---
+new_home
+cat > "$HOME/.agent-inbox/config" <<'CFG'
+WATCH_MODE=tagged
+WATCH_TAGS="#ping @@follow"
+MUTE_TAG="#quiet"
+CFG
+out="$(run notification "$(notif_payload)")"
+[ -z "$out" ] && ok "a custom list ignores the built-in tags" \
+  || fail "a custom list ignores the built-in tags" "got: $out"
+
+run prompt "$(prompt_payload 'the old #notify should do nothing now')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+[ -z "$out" ] && ok "a replaced tag stops working" \
+  || fail "a replaced tag stops working" "got: $out"
+
+run prompt "$(prompt_payload 'try @@follow instead')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+case "$out" in *"WOULD SEND"*) ok "a custom watch tag enables the conversation";;
+  *) fail "a custom watch tag enables the conversation" "got: $out";; esac
+
+run prompt "$(prompt_payload 'now #quiet please')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+[ -z "$out" ] && ok "a custom mute tag silences the conversation" \
+  || fail "a custom mute tag silences the conversation" "got: $out"
+
+# --- case does not matter ---
+new_home
+printf 'WATCH_MODE=tagged\n' > "$HOME/.agent-inbox/config"
+run prompt "$(prompt_payload 'shouting #NOTIFY at it')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+case "$out" in *"WOULD SEND"*) ok "tags match regardless of case";;
+  *) fail "tags match regardless of case" "got: $out";; esac
+
+# --- an empty list must not become an inescapable silence ---
+new_home
+cat > "$HOME/.agent-inbox/config" <<'CFG'
+WATCH_MODE=tagged
+WATCH_TAGS=""
+CFG
+run prompt "$(prompt_payload 'falling back, so #notify still works')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+case "$out" in *"WOULD SEND"*) ok "an empty tag list falls back to the defaults";;
+  *) fail "an empty tag list falls back to the defaults" "got: $out";; esac
+
+# --- an empty mute tag must not silence everything ---
+new_home
+cat > "$HOME/.agent-inbox/config" <<'CFG'
+MUTE_TAG=""
+CFG
+run prompt "$(prompt_payload 'a message with no tags at all')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+case "$out" in *"WOULD SEND"*) ok "an empty mute tag does not silence everything";;
+  *) fail "an empty mute tag does not silence everything" "got: $out";; esac
+
 echo
 echo "$PASS checks passed"
