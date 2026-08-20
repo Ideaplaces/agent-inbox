@@ -84,6 +84,46 @@ private struct GeneralSettings: View {
                 }
             }
 
+            Section("Conversations") {
+                Picker("Report", selection: $settings.watchMode) {
+                    Text("Every conversation").tag("all")
+                    Text("Only tagged conversations").tag("tagged")
+                }
+                Text(settings.watchMode == "tagged"
+                     ? "Nothing reports until you put a watch tag in the conversation. For when a dozen are open and one matters."
+                     : "Everything reports. Put the mute tag in a conversation to silence that one.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+
+                LabeledContent("Watch tags") {
+                    TextField(AppSettings.defaultWatchTags, text: $settings.watchTags)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 11, design: .monospaced))
+                        .onSubmit { settings.watchTags = AppSettings.normalizeTags(settings.watchTags) }
+                }
+                LabeledContent("Mute tag") {
+                    TextField(AppSettings.defaultMuteTag, text: $settings.muteTag)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 11, design: .monospaced))
+                        .onSubmit { settings.muteTag = AppSettings.normalizeTags(settings.muteTag) }
+                }
+                HStack {
+                    Text("Typed anywhere in a message. Several watch tags, space separated; case does not matter, and the most recent tag wins.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Button("Reset") {
+                        settings.watchTags = AppSettings.defaultWatchTags
+                        settings.muteTag = AppSettings.defaultMuteTag
+                    }
+                    .controlSize(.small)
+                }
+                Text("These apply on every machine that reads your config, not just this Mac.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+
             Section("Polling") {
                 LabeledContent("Check every") {
                     Stepper(value: $settings.pollSeconds, in: 5...120, step: 5) {
@@ -91,13 +131,6 @@ private struct GeneralSettings: View {
                     }
                     .onChange(of: settings.pollSeconds) { _, _ in model.poller.restart() }
                 }
-                Picker("Report", selection: $settings.watchMode) {
-                    Text("Every conversation").tag("all")
-                    Text("Only tagged conversations").tag("tagged")
-                }
-                Text("Type #notify, #inbox, #watch or #agent-inbox in a conversation to have it report, and #mute to silence it. The most recent tag wins. Applies on every machine that reads your config.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
                 LabeledContent("Ignore turns under") {
                     Stepper(value: $settings.minSeconds, in: 0...600, step: 15) {
                         Text("\(settings.minSeconds)s")

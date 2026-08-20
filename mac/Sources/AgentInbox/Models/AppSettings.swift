@@ -77,6 +77,14 @@ final class AppSettings {
     var watchMode: String {
         didSet { defaults.set(watchMode, forKey: "watchMode"); sync() }
     }
+    /// Sender-side: the tags that turn a conversation on, space separated.
+    var watchTags: String {
+        didSet { defaults.set(watchTags, forKey: "watchTags"); sync() }
+    }
+    /// Sender-side: the tag that silences a conversation.
+    var muteTag: String {
+        didSet { defaults.set(muteTag, forKey: "muteTag"); sync() }
+    }
     /// Sender-side: turns shorter than this never reach the inbox.
     var minSeconds: Int {
         didSet { defaults.set(minSeconds, forKey: "minSeconds"); sync() }
@@ -98,6 +106,8 @@ final class AppSettings {
             "idleThreshold": 90,
             "minSeconds": 45,
             "watchMode": "all",
+            "watchTags": AppSettings.defaultWatchTags,
+            "muteTag": AppSettings.defaultMuteTag,
             "soundName": "",
         ])
         transport = TransportKind(rawValue: defaults.string(forKey: "transport") ?? "") ?? .none
@@ -116,8 +126,21 @@ final class AppSettings {
         soundName = defaults.string(forKey: "soundName") ?? ""
         minSeconds = defaults.integer(forKey: "minSeconds")
         watchMode = defaults.string(forKey: "watchMode") ?? "all"
+        watchTags = defaults.string(forKey: "watchTags") ?? AppSettings.defaultWatchTags
+        muteTag = defaults.string(forKey: "muteTag") ?? AppSettings.defaultMuteTag
         hostLabel = defaults.string(forKey: "hostLabel") ?? Host.current().localizedName ?? "mac"
         hasCompletedOnboarding = defaults.bool(forKey: "hasCompletedOnboarding")
+    }
+
+    static let defaultWatchTags = "#notify #inbox #watch #agent-inbox"
+    static let defaultMuteTag = "#mute"
+
+    /// Space separated, whitespace tidied, so what is stored is what the
+    /// sender will actually split on.
+    static func normalizeTags(_ raw: String) -> String {
+        raw.split(whereSeparator: { $0.isWhitespace || $0 == "," })
+            .map(String.init)
+            .joined(separator: " ")
     }
 
     /// The topic is the only secret protecting message bodies, so it has to be
@@ -171,7 +194,9 @@ final class AppSettings {
             discordGuildID: discordGuildID,
             minSeconds: minSeconds,
             hostLabel: hostLabel,
-            watchMode: watchMode)
+            watchMode: watchMode,
+            watchTags: watchTags,
+            muteTag: muteTag)
     }
 
     /// Take over an existing bash install without making the user retype it.
@@ -204,6 +229,8 @@ final class AppSettings {
             case "NOTIFY_SOUND": soundName = value
             case "HOST_LABEL": if !value.isEmpty { hostLabel = value }
             case "WATCH_MODE": if value == "all" || value == "tagged" { watchMode = value }
+            case "WATCH_TAGS": if !value.isEmpty { watchTags = value }
+            case "MUTE_TAG": if !value.isEmpty { muteTag = value }
             case "NTFY_SERVER": if !value.isEmpty { ntfyServer = value }
             default: break
             }

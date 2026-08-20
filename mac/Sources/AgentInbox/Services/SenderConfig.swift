@@ -12,6 +12,8 @@ struct SenderSnapshot {
     var minSeconds: Int = 45
     var hostLabel: String = "mac"
     var watchMode: String = "all"
+    var watchTags: String = "#notify #inbox #watch #agent-inbox"
+    var muteTag: String = "#mute"
 }
 
 /// `~/.agent-inbox/` is the contract between this app and the shell senders.
@@ -99,6 +101,9 @@ enum SenderConfig {
             "\(marker) Sender-side settings for notify.sh.",
             "MIN_SECONDS=\(settings.minSeconds)",
             "WATCH_MODE=\(settings.watchMode)",
+            // Quoted: the values start with # and are read by a shell.
+            "WATCH_TAGS=\"\(settings.watchTags)\"",
+            "MUTE_TAG=\"\(settings.muteTag)\"",
             "HOST_LABEL=\"\(settings.hostLabel)\"",
         ]
         if settings.transport == .ntfy, settings.ntfyServer != "https://ntfy.sh" {
