@@ -1,15 +1,20 @@
 # Agent Inbox
 
-**Native Mac notifications for every Claude Code session that finishes or needs you — across all your machines.**
+**Native Mac notifications for every Claude Code session that finishes or needs you, across all your machines.**
 
-If you run several Claude Code sessions in parallel (some local, some over SSH on a dev box), the bottleneck isn't the agents — it's remembering who finished what and who is sitting blocked on a permission prompt. Agent Inbox flips that around: sessions interrupt *you*.
+If you run several Claude Code sessions in parallel, some local and some over SSH on a dev
+box, the bottleneck isn't the agents. It's remembering who finished what, and who is sitting
+blocked on a permission prompt. Agent Inbox turns that around: sessions interrupt *you*.
 
-- 🖐️ **"Needs you"** — an agent hit a permission prompt or is waiting for input
-- ✅ **"Finished"** — a turn completed, with how long it took and the agent's closing words
-- 🧵 **Context on every message** — what the conversation is about and what you last asked, so a ping from a two-day-old session still rings the right bell
-- 📌 **Sticky menubar inbox** — a `🖐️2 ✅3` badge that stays until you mark it read. Go for coffee, come back, see who's waiting.
+- 🖐️ **Needs you.** An agent hit a permission prompt or is waiting for input.
+- ✅ **Finished.** A turn completed, with how long it took and the agent's closing words.
+- 🧵 **Context on every message.** What the conversation is about and what you last asked,
+  so a ping from a two-day-old session still rings the right bell.
+- **A sticky menubar inbox.** A `🖐️2 ✅3` badge that stays until you mark it read. Go for
+  coffee, come back, see who's waiting.
 
-A native menubar app on the Mac, plain bash on every machine that sends. No server to run, no service to sign up for, no account required.
+A native menubar app on the Mac, plain bash on every machine that sends. No server to run
+and no account required.
 
 ```
 senders (Claude Code hooks)         transport              surface (your Mac)
@@ -19,175 +24,224 @@ dev-box sessions  ─ notify.sh ─┼─→      or         ─┤
 any other machine ─ notify.sh ─┘   Discord channel  └─ menubar inbox
 ```
 
-## Quickstart
+The **transport** is just the channel your machines post to and your Mac reads from. There
+is no Agent Inbox server; the transport is somebody else's, and you pick which.
 
-**On your Mac:**
+## Install
+
+You need Claude Code already working, and macOS 14 or newer for the app.
+
+### 1. Your Mac
 
 ```bash
 brew install --cask ideaplaces/tap/agent-inbox
 ```
 
-Or download the latest `AgentInbox.dmg` from
+Or download the latest `.dmg` from
 [Releases](https://github.com/Ideaplaces/agent-inbox/releases) and drag it to Applications.
-Either way the app is signed and notarized, so it opens without a Gatekeeper warning, and
-it updates itself from then on.
+Either way it is signed and notarized, so it opens without a Gatekeeper warning and updates
+itself from then on.
 
-Open it and the setup window walks you through three things: pick a transport, wire up this
-Mac, and copy the one-line command for your other machines. Nothing to clone, no
-dependencies to install.
+Open it. A setup window appears and does three things:
 
-Prefer to build it yourself? See [mac/README.md](mac/README.md) — it is `./mac/build.sh`
-and a Swift toolchain.
+1. **Picks a transport.** It defaults to ntfy and generates a private topic for you, so
+   there is nothing to decide or sign up for.
+2. **Wires up this Mac**, by adding three hooks to `~/.claude/settings.json`. It backs the
+   file up first and leaves everything else in it alone.
+3. **Gives you a one-line command** for your other machines, with a copy button.
 
-**On every other machine** where Claude Code runs, including a dev box you only reach
-over SSH, paste the command the app gives you:
+Then restart any Claude Code sessions that were already running, so they pick up the hooks.
+
+That is the whole install. Nothing to clone.
+
+### 2. Your other machines
+
+Run the command the app gave you on any other machine where Claude Code runs, including a
+dev box you only reach over SSH. It looks like this:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Ideaplaces/agent-inbox/main/install-remote.sh \
-  | bash -s -- --ntfy <your-topic> --host-label <ssh-host-alias>
+  | bash -s -- --ntfy <your-topic> --host-label <name-for-this-machine>
 ```
 
-Set `--host-label` to something you will recognise in a notification title, such as the
-machine's SSH host alias.
+It needs `bash`, `curl`, and `jq`, and nothing else. No login, because the topic itself is
+the credential.
 
-Restart any running Claude Code sessions to pick up the hooks.
+`--host-label` is how you tell machines apart in a notification title, so use something you
+will recognise. The machine's SSH host alias is the natural choice.
 
-### Choosing a transport
+Restart any running Claude Code sessions there too.
 
-**ntfy is the default and you can ignore this section.** The app generates a long random
-topic on first launch and you are done.
+> **Give each person their own transport.** Message bodies carry snippets of your prompts
+> and Claude's replies. If two people share a topic or a webhook, they each read the
+> other's sessions, in both directions.
+
+## Choosing a transport
+
+**ntfy is the default, and you can skip this section.**
 
 [ntfy.sh](https://ntfy.sh) is a free, open-source pub/sub service. There is no signup, no
-bot, no webhook: a channel is just a topic name you invent. Anyone who knows the topic can
-read it, so the generated topic is effectively the password. Keep it private and never
-share it, including with a teammate: a shared topic means you each see the other's prompts
-and replies.
+bot and no webhook: a channel is just a topic name. Anyone who knows the topic can read it,
+so the topic is effectively the password, which is why the app generates a long random one
+rather than letting you invent a short one. Keep it private.
 
-The one thing ntfy does not give you is history. The public server caches messages for
-about 12 hours, so the menubar inbox is your record, not the feed.
+What ntfy does not give you is history. The public server caches messages for about 12
+hours, so the menubar inbox is your record, not the feed. You can
+[self-host ntfy](https://docs.ntfy.sh/install/) and set `NTFY_SERVER` to change that.
 
-Choose **Discord** when you want a durable, browsable archive of every session, and phone
-push through an app you already run. It costs a bot and a webhook to set up. See
-[Discord setup](#alternative-transport-discord).
+Choose **Discord** when you want a durable, browsable archive of every session, plus phone
+push through an app you probably already run. It costs a bot and a private channel to set
+up. See [Setting up Discord](#setting-up-discord).
 
-### Shell-only install (no Mac app)
-
-The senders are plain bash and work without the app. Use `./install.sh --ntfy <topic>`
-from a clone if you want the hooks and nothing else, and read the transport's own history
-as your inbox.
-
-## What you get
-
-| Hook event | Meaning | Behavior |
-|------------|---------|----------|
-| `UserPromptSubmit` | You handed work to the agent | Records a start timestamp (no notification) |
-| `Stop` | Agent finished its turn | **✅** with duration + the agent's closing words — turns under `MIN_SECONDS` (45s) are suppressed so quick back-and-forth doesn't spam you |
-| `Notification` | Agent needs permission or is idle waiting | **🖐️** with the reason and what the agent just asked |
-
-A notification looks like:
+## What a notification looks like
 
 ```
 🖐️ my-app @ devbox
-🧵 Refactor the checkout flow to use the new payments SDK   ← conversation summary
-🗣 ok now handle the refund path too                        ← your latest message
-Claude needs your permission to use Bash                    ← why it pinged
-❯ Should I run the migration against staging first?         ← what it's waiting on
+🧵 Refactor the checkout flow to use the new payments SDK   <- conversation summary
+🗣 ok now handle the refund path too                        <- your latest message
+Claude needs your permission to use Bash                    <- why it pinged
+❯ Should I run the migration against staging first?         <- what it's waiting on
 ```
 
-**Click an item to clear it.** There is no jump-to-session: the notification carries only the first eight characters of the session id, and `claude --resume` needs the whole one, so anything a click could open would be the wrong window.
+Three hooks produce these:
 
-**Items expire on keyboard time, not wall time.** An item clears after `EXPIRE_MINUTES` (default 5) of you actually being at the Mac, so while you work the list stays short instead of piling into noise. The clock stops when you step away, so a coffee-break backlog is still waiting when you return — and starts draining only once you are back. Set `EXPIRE_MINUTES=0` to keep everything until "Mark all read".
+| Hook event | Meaning | What you get |
+|------------|---------|--------------|
+| `UserPromptSubmit` | You handed work to the agent | Nothing. It just records a start time |
+| `Stop` | The agent finished its turn | **✅** with the duration and its closing words. Turns shorter than `MIN_SECONDS` (45s by default) are dropped, so quick back-and-forth doesn't spam you |
+| `Notification` | The agent needs permission, or is idle waiting | **🖐️** with the reason and what it just asked |
 
-## ⚠️ Your conversation content travels through the transport
+**Clicking an item clears it.** There is deliberately no jump-to-session: a notification
+carries only the first eight characters of the session id, and `claude --resume` needs the
+whole one, so anything a click could open would be the wrong window.
 
-Notification bodies include snippets of your prompts and Claude's replies, plus repo names and working directory paths. That means:
+**Items expire on keyboard time, not wall time.** An item clears after you have actually
+been at the Mac for a while (five minutes by default, in **Settings → Inbox**), so while you
+work the list stays short instead of piling into noise. The clock stops when you step away,
+so a coffee-break backlog is still waiting when you get back, and only starts draining once
+you are. Set it to `Never` to keep everything until you hit Mark All Read.
 
-- **ntfy**: use a long unguessable topic (anyone with the topic string can read your messages), or [self-host ntfy](https://docs.ntfy.sh/install/) and set `NTFY_SERVER`.
-- **Discord**: use a private channel.
-- Either way, don't point this at a shared or public channel, and think twice if you work on sensitive codebases.
+## Your conversation content travels through the transport
 
-## Alternative transport: Discord
+Notification bodies include snippets of your prompts and Claude's replies, plus repo names
+and working directory paths. So:
 
-Slightly more setup, but you get a browsable channel history that doubles as a catch-up inbox, plus phone push through the Discord app you probably already run.
-
-1. Create a Discord bot ([developer portal](https://discord.com/developers/applications)), invite it to your server with permissions to manage channels and webhooks.
-2. Provision a private channel + webhook:
-   ```bash
-   AGENT_INBOX_GUILD=<server-id> AGENT_INBOX_BOT_TOKEN=<bot-token> \
-     ./setup-user.sh <name> <your-discord-user-id>
-   ```
-   It prints the exact install commands to run next.
-3. Senders: `./install.sh --discord-webhook '<webhook-url>'`
-4. Mac: `./install-mac-watcher.sh --discord '<bot-token>' <channel-id> <guild-id>`
-
-The bot token is only needed on the Mac (reading messages back); sending machines just need the webhook URL.
-
-**Azure Key Vault users:** set `AGENT_INBOX_VAULT` and use `--keyvault <name>` on both installers to skip passing secrets around.
-
-## Config
-
-Optional `~/.agent-inbox/config`, sourced by the scripts:
-
-```bash
-MIN_SECONDS=20                  # ignore turns shorter than this
-HOST_LABEL="mac"                # machine name shown in messages
-NTFY_SERVER="https://ntfy.sh"   # self-hosted ntfy instance
-```
-
-These are sender-side only. Everything the Mac surface does (poll interval, sound, expiry,
-idle threshold) lives in the app's own Settings, and the app writes the keys above so the
-two can never disagree.
-
-Runtime state lives in `~/.agent-inbox/`: `bin/notify.sh` (unpacked from the app), transport config for the senders (`ntfy-topic`, `webhook-url`, `channel-id`, `guild-id`), `state/<session>.start` (turn timers), `presence` (seconds clocked at the keyboard), and `items.json` (the inbox).
+- **ntfy:** treat the generated topic like a password. Anyone who has it can read your
+  messages. Self-host if that isn't good enough.
+- **Discord:** use a private channel, not one other people are in.
+- Either way, think twice if you work on sensitive codebases.
 
 ## Updates
 
-The app checks for updates once a day and installs them itself
-([Sparkle](https://sparkle-project.org), EdDSA-signed). Turn it off in
-**Settings → Updates**, or check on demand from the menu.
+The app checks once a day and installs updates itself
+([Sparkle](https://sparkle-project.org), EdDSA-signed, so it only installs a build signed
+with our key). Turn it off in **Settings → Updates**, or check on demand from the menu.
 
-Installed with Homebrew? `brew upgrade --cask agent-inbox` works too; either path is fine.
+Installed with Homebrew? `brew upgrade --cask agent-inbox` works too. Either path is fine.
 
-## Requirements
+## Setting up Discord
 
-- **Senders** (any OS Claude Code runs on): `bash`, `jq`, `curl`
-- **Mac app**: macOS 14 or newer. Nothing else.
+Everything below is optional. ntfy needs none of it.
+
+1. Create a Discord bot in the [developer portal](https://discord.com/developers/applications)
+   and invite it to your server with permission to manage channels and webhooks.
+2. Clone this repo and provision a private channel plus its webhook:
+   ```bash
+   git clone https://github.com/Ideaplaces/agent-inbox.git && cd agent-inbox
+   AGENT_INBOX_GUILD=<server-id> AGENT_INBOX_BOT_TOKEN=<bot-token> \
+     ./setup-user.sh <name> <your-discord-user-id>
+   ```
+   It prints the channel id and webhook URL you need next.
+3. **On your Mac**, open **Settings → Transport**, choose Discord, and paste the bot token,
+   channel id, server id, and webhook URL. Nothing to run in a terminal.
+4. **On every other machine**, use the same one-line installer as before with the webhook
+   instead of a topic:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/Ideaplaces/agent-inbox/main/install-remote.sh \
+     | bash -s -- --discord-webhook '<webhook-url>' --host-label <name-for-this-machine>
+   ```
+
+The bot token is only needed on your Mac, because that is the side that reads messages back.
+Sending machines only need the webhook URL, so a dev box can post but cannot read your
+history.
+
+**Azure Key Vault users:** set `AGENT_INBOX_VAULT` and use `--keyvault <name>` to keep the
+webhook out of your shell history.
+
+## Config
+
+The app owns its own settings, in **Settings**. The only file you might touch is
+`~/.agent-inbox/config`, which the bash senders read:
+
+```bash
+MIN_SECONDS=45                  # ignore turns shorter than this
+HOST_LABEL="mac"                # machine name shown in messages
+NTFY_SERVER="https://ntfy.sh"   # a self-hosted ntfy instance
+```
+
+These are sender-side only, and the app writes them itself so the two can never disagree.
+Poll interval, sound, expiry and idle threshold are app-side and live in Settings.
+
+Runtime state also lives in `~/.agent-inbox/`: `bin/notify.sh` (unpacked from the app),
+the sender's transport config, `state/<session>.start` (turn timers), `presence` (seconds
+clocked at the keyboard), and `items.json` (the inbox itself).
 
 ## How it works
 
-The app installs three hooks into `~/.claude/settings.json` (idempotent, and it backs the
-file up first). On `Stop` and `Notification`, `notify.sh` reads the session transcript,
-extracts the context lines, and posts to your transport. The Mac app polls that transport,
-raises a native notification, and keeps the item in the menubar inbox until you read it or
-until it ages out.
+The app adds three hooks to `~/.claude/settings.json`. It is idempotent, it backs the file
+up first, and it leaves your other hooks and settings untouched. On `Stop` and
+`Notification`, `notify.sh` reads the session transcript, pulls out the context lines, and
+posts to your transport. The Mac app polls that transport, raises a native notification, and
+keeps the item in the menubar inbox until you read it or it ages out.
 
 `notify.sh` ships inside the app bundle and is unpacked to `~/.agent-inbox/bin/notify.sh`,
-so the hooks keep working when the app is moved, updated, or quit. Secrets the app owns
-(bot token, webhook URL) live in the login Keychain rather than on disk; the sender-side
-settings stay mirrored into `~/.agent-inbox/config` because the hooks are still bash.
+so hooks keep working when the app is moved, updated or quit, and a session that fires a
+hook while the app is closed still reaches the transport. Secrets the app owns, the bot
+token and webhook URL, live in the login Keychain rather than on disk.
 
-Uninstall: **Settings → Machines → Remove** takes the hooks back out (the original file is
-kept at `~/.claude/settings.json.bak.agent-inbox`), then quit the app, drag it to the
-Trash, and `rm -rf ~/.agent-inbox/`.
+**Requirements:** senders need `bash`, `jq` and `curl` on any OS Claude Code runs on. The
+Mac app needs macOS 14 or newer and nothing else.
 
-### Upgrading from the shell-only watcher
+**Building it yourself:** see [mac/README.md](mac/README.md). It is `./mac/build.sh` plus a
+Swift toolchain.
 
-The app adopts an existing `~/.agent-inbox/` install on first launch: same transport, same
-host label, same settings, nothing to retype. Your previous `config` is kept at
-`config.bak.agent-inbox`. Then retire the old surface:
+## Uninstall
+
+**Settings → Machines → Remove** takes the hooks back out; the original file is kept at
+`~/.claude/settings.json.bak.agent-inbox`. Then quit the app, drag it to the Trash, and
+`rm -rf ~/.agent-inbox/`.
+
+On a sending machine, restore the backup the installer left and remove the state:
+
+```bash
+mv ~/.claude/settings.json.bak.agent-inbox ~/.claude/settings.json
+rm -rf ~/.agent-inbox
+```
+
+## Without the Mac app
+
+The senders are plain bash and work on their own, so you can skip the app entirely and read
+the transport's history as your inbox. Clone the repo and run
+`./install.sh --ntfy <topic>` for the hooks and nothing else.
+
+`install-mac-watcher.sh`, `watch-mac.sh` and `swiftbar-plugin/` are the previous Mac
+surface, kept for anyone still running it. **Do not run them alongside the app**, or every
+event arrives twice. If you are upgrading from that setup, the app adopts your existing
+`~/.agent-inbox/` config on first launch (same transport, same host label, nothing to
+retype; your old `config` is kept as `config.bak.agent-inbox`). Then retire the old one:
 
 ```bash
 launchctl unload ~/Library/LaunchAgents/com.agent-inbox.watcher.plist
 rm ~/Library/LaunchAgents/com.agent-inbox.watcher.plist
-rm "$(defaults read com.ameba.SwiftBar PluginDirectory)/agent-inbox.5s.sh"   # plugin symlink
+rm "$(defaults read com.ameba.SwiftBar PluginDirectory)/agent-inbox.5s.sh"
 ```
 
 Installing hooks from the app replaces any hook pointing at an older `notify.sh`, so you
-never get two copies of every event.
+never end up with two copies of every event.
 
 ## Roadmap
 
-Collapsing (a ✅ retiring an earlier 🖐️ from the same session), and cloud/remote agents in
+Collapsing, so a ✅ retires an earlier 🖐️ from the same session. Cloud and remote agents in
 the same inbox.
 
 ## License
