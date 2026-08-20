@@ -37,6 +37,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The tag is the single source of the version. Committing a VERSION bump
+      # separately means the two can disagree, and a mismatch is invisible:
+      # the appcast advertises whatever VERSION said, so the release notes and
+      # the update feed quietly describe different builds.
+      - name: Take the version from the tag
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          case "$TAG" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "tag $GITHUB_REF_NAME is not vMAJOR.MINOR.PATCH" >&2; exit 1 ;;
+          esac
+          echo "$TAG" > mac/VERSION
+          echo "building $TAG"
+
       - name: Test
         working-directory: mac
         run: swift test

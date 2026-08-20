@@ -95,6 +95,10 @@ Scripts/make-icon.swift        renders the app icon; no binary asset is committe
 
 ## Versioning
 
+Releasing is one step: `git tag v0.1.5 && git push origin v0.1.5`. The release workflow
+writes the tag's version into `VERSION` before building, so the two cannot drift. The file
+in git is only what local builds use.
+
 `VERSION` holds the marketing version. `CFBundleVersion` is derived from it as
 `major*1000000 + minor*1000 + patch`, because Sparkle decides whether an update exists by
 comparing that number, so it must increase with every release and must not depend on the
