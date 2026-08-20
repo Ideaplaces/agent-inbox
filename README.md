@@ -37,6 +37,18 @@ You need Claude Code already working, and macOS 14 or newer for the app.
 brew install --cask ideaplaces/tap/agent-inbox
 ```
 
+Or do the whole thing, install and configure and hooks and login item, in one command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ideaplaces/agent-inbox/main/setup-mac.sh \
+  | bash -s -- --ntfy <topic>
+```
+
+That drives the same code the setup window does, through the app's CLI flags, so a new
+machine needs no clicking. It falls back to downloading the release DMG when Homebrew is
+not installed. Teams on Azure Key Vault can use `--keyvault <name>` instead and skip
+handling secrets entirely.
+
 Or download the latest `.dmg` from
 [Releases](https://github.com/Ideaplaces/agent-inbox/releases) and drag it to Applications.
 Either way it is signed and notarized, so it opens without a Gatekeeper warning and updates
