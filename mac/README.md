@@ -93,6 +93,18 @@ Sources/AgentInbox/
 Scripts/make-icon.swift        renders the app icon; no binary asset is committed
 ```
 
+## Versioning
+
+`VERSION` holds the marketing version. `CFBundleVersion` is derived from it as
+`major*1000000 + minor*1000 + patch`, because Sparkle decides whether an update exists by
+comparing that number, so it must increase with every release and must not depend on the
+environment it was built in.
+
+It used to be `git rev-list --count HEAD`, which is `1` on CI: `actions/checkout` clones to
+depth 1. Every release therefore shipped build `1`, and no installed copy could ever see a
+newer one. Sparkle reported "you're up to date" against an appcast advertising a newer
+release, which is a silent failure of the whole update mechanism.
+
 ## Design notes
 
 **The hooks point at `~/.agent-inbox/bin/notify.sh`, not into the app bundle.** The app
