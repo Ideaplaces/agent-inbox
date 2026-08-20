@@ -114,6 +114,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 exit(1)
             }
         }
+        // Configure the transport without the UI, so a provisioning script can
+        // do in one command what the setup window does in several fields.
+        if arguments.contains("--configure") {
+            let settings = AppSettings.shared
+            func value(_ flag: String) -> String? {
+                guard let i = arguments.firstIndex(of: flag), i + 1 < arguments.count
+                else { return nil }
+                return arguments[i + 1]
+            }
+            func fail(_ message: String) -> Never {
+                FileHandle.standardError.write(Data("\(message)\n".utf8))
+                exit(1)
+            }
+
+            switch value("--transport") {
+            case "ntfy":
+                guard let topic = value("--topic"), !topic.isEmpty else {
+                    fail("--transport ntfy requires --topic")
+                }
+                settings.ntfyTopic = topic
+                if let server = value("--server"), !server.isEmpty {
+                    settings.ntfyServer = server
+                }
+                settings.transport = .ntfy
+                print("configured ntfy topic")
+            case "discord":
+                guard let token = value("--bot-token"), !token.isEmpty,
+                      let channel = value("--channel-id"), !channel.isEmpty else {
+                    fail("--transport discord requires --bot-token and --channel-id")
+                }
+                settings.discordBotToken = token
+                settings.discordChannelID = channel
+                settings.discordGuildID = value("--guild-id") ?? ""
+                settings.discordWebhookURL = value("--webhook") ?? ""
+                settings.transport = .discord
+                print("configured Discord channel \(channel)")
+            default:
+                fail("--configure requires --transport ntfy|discord")
+            }
+
+            if let label = value("--host-label"), !label.isEmpty {
+                settings.hostLabel = label
+            }
+            // This process is about to exit, so the defaults must be on disk.
+            UserDefaults.standard.synchronize()
+            settings.hasCompletedOnboarding = true
+            UserDefaults.standard.synchronize()
+            exit(0)
+        }
+
         if arguments.contains("--install-hooks") {
             SenderConfig.installNotifyScript()
             do {
