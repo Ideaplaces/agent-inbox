@@ -1,9 +1,32 @@
 import AppKit
 import SwiftUI
 
+/// Reports the measured height of the row stack.
+private struct ContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 @MainActor
 struct MenuContentView: View {
     @Environment(AppModel.self) private var model
+    @State private var contentHeight: CGFloat = 0
+
+    /// One row is roughly 56pt, so this keeps a single item visible even
+    /// before the first measurement lands.
+    static let minimumListHeight: CGFloat = 56
+    static let maximumListHeight: CGFloat = 640
+
+    /// The height to give the list for a measured content height.
+    ///
+    /// Separated out so the property that actually broke can be asserted: this
+    /// must never return zero. A zero here is invisible, because the badge goes
+    /// on counting items that the menu is no longer drawing.
+    static func listHeight(forContent measured: CGFloat) -> CGFloat {
+        min(max(measured, minimumListHeight), maximumListHeight)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -76,16 +99,35 @@ struct MenuContentView: View {
             .background(tint.opacity(0.15), in: Capsule())
     }
 
+    /// The rows, in a scroll view whose height is measured rather than proposed.
+    ///
+    /// A ScrollView has no intrinsic height. Inside a menubar popover, which
+    /// sizes itself to its content, `.frame(maxHeight:)` is only a ceiling and
+    /// nothing establishes a floor, so the whole list can be handed zero height
+    /// and vanish while the badge still counts the items. That is exactly what
+    /// happened when the cap went from 420 to 640: header and footer drew, and
+    /// the rows between them were silently given no room.
+    ///
+    /// Measuring the content and clamping to it gives the popover a definite
+    /// height to work with. VStack rather than LazyVStack because a lazy stack
+    /// only measures the rows it has materialised, which is none of them when
+    /// the height is still zero.
     private var itemList: some View {
         ScrollView {
-            LazyVStack(spacing: 0) {
+            VStack(spacing: 0) {
                 ForEach(model.store.unread.reversed()) { item in
                     ItemRow(item: item)
                     Divider().padding(.leading, 40)
                 }
             }
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(key: ContentHeightKey.self, value: proxy.size.height)
+                }
+            )
         }
-        .frame(maxHeight: 640)
+        .frame(height: Self.listHeight(forContent: contentHeight))
+        .onPreferenceChange(ContentHeightKey.self) { contentHeight = $0 }
     }
 
     private var emptyState: some View {
