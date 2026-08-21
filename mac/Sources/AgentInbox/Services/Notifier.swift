@@ -28,7 +28,8 @@ enum Notifier {
         if let ask = item.ask { lines.append("🗣 \(ask)") }
         if let detail = item.detail { lines.append(detail) }
         if let waiting = item.waitingOn { lines.append("❯ \(waiting)") }
-        content.body = lines.joined(separator: "\n")
+        // A banner is plain text, so markers would show as literal ** and `.
+        content.body = MarkdownText.plain(lines.joined(separator: "\n"))
 
         content.categoryIdentifier = categoryID
         content.userInfo = ["itemID": item.id]
