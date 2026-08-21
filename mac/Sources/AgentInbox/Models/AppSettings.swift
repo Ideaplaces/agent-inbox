@@ -132,15 +132,25 @@ final class AppSettings {
         hasCompletedOnboarding = defaults.bool(forKey: "hasCompletedOnboarding")
     }
 
-    static let defaultWatchTags = "#notify #inbox #watch #agent-inbox"
-    static let defaultMuteTag = "#mute"
+    // Spoken forms ship alongside the typed ones because dictation cannot
+    // produce a "#": across 37,000 dictations, "hashtag notify" never once
+    // became "#notify". Saying "watch this" has to be enough.
+    static let defaultWatchTags = "#notify, #inbox, #watch, #agent-inbox, watch this, notify me"
+    static let defaultMuteTag = "#mute, stop notifying"
 
-    /// Space separated, whitespace tidied, so what is stored is what the
-    /// sender will actually split on.
+    /// Tidied into what the sender will actually split on.
+    ///
+    /// A comma anywhere means the tags are phrases, so only commas separate
+    /// them and the spaces inside a tag are kept. Without one, whitespace
+    /// separates, which is the older "#a #b" form.
     static func normalizeTags(_ raw: String) -> String {
-        raw.split(whereSeparator: { $0.isWhitespace || $0 == "," })
-            .map(String.init)
-            .joined(separator: " ")
+        let parts: [String] = raw.contains(",")
+            ? raw.split(separator: ",").map(String.init)
+            : raw.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        return parts
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: raw.contains(",") ? ", " : " ")
     }
 
     /// The topic is the only secret protecting message bodies, so it has to be

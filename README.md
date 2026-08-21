@@ -139,18 +139,25 @@ By default every conversation reports. Twenty sessions open and one you actually
 care about is a different problem, so a conversation can be tagged from inside
 itself. Type any of these anywhere in a message:
 
-| You type | Effect |
+| You type or say | Effect |
 |---|---|
-| `#notify`, `#inbox`, `#watch`, `#agent-inbox` | This conversation reports |
-| `#mute` | This conversation goes quiet |
+| `#notify`, `#inbox`, `#watch`, `#agent-inbox`, or "watch this", "notify me" | This conversation reports |
+| `#mute`, or "stop notifying" | This conversation goes quiet |
+
+**The spoken forms are there because dictation cannot produce a `#`.** Saying
+"hashtag notify" does not become `#notify` in any dictation tool worth using, so
+a tag you can only type is a tag a voice user cannot reach. "Watch this one" is
+easy to say and works the same way.
 
 The most recent tag wins, so you can flip a conversation on and off as often as
 you like, and it works on a conversation that is already running. Case does not
 matter. Nothing else to remember: no session ids, no separate command.
 
-**The tags are yours to choose.** Change them in **Settings → Conversations**:
-several watch tags separated by spaces, one mute tag. Emptying the watch tags
-restores the defaults rather than leaving a silence nothing could escape.
+**The tags are yours to choose.** Change them in **Settings → Conversations**.
+Separate several with commas, which is what lets a tag be a phrase with spaces in
+it. Without a comma they are separated by whitespace, so `#a #b` still means two
+tags. Emptying the watch tags restores the defaults rather than leaving a silence
+nothing could escape.
 
 **Settings → Conversations → Report** switches the default:
 
@@ -224,8 +231,8 @@ The app owns its own settings, in **Settings**. The only file you might touch is
 ```bash
 MIN_SECONDS=45                  # ignore turns shorter than this
 WATCH_MODE=all                  # or "tagged": report only tagged conversations
-WATCH_TAGS="#notify #inbox #watch #agent-inbox"   # tags that turn a conversation on
-MUTE_TAG="#mute"                # the tag that silences one
+WATCH_TAGS="#notify, #inbox, watch this"   # tags that turn a conversation on
+MUTE_TAG="#mute, stop notifying"           # tags that silence one
 HOST_LABEL="mac"                # machine name shown in messages
 NTFY_SERVER="https://ntfy.sh"   # a self-hosted ntfy instance
 ```

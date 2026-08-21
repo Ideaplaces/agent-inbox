@@ -26,9 +26,11 @@ HOST_LABEL="$(hostname -s)"
 # tagged nothing reports until a watch tag turns it on
 WATCH_MODE=all
 # The tags themselves, so they can be changed without touching this script.
-# Space separated; matching ignores case.
-WATCH_TAGS="#notify #inbox #watch #agent-inbox"
-MUTE_TAG="#mute"
+# Space separated, or comma separated when a tag is a phrase with spaces in it,
+# which is what dictation needs: "hashtag notify" does not become "#notify",
+# but "watch this one" is easy to say. Matching ignores case.
+WATCH_TAGS="#notify, #inbox, #watch, #agent-inbox, watch this, notify me"
+MUTE_TAG="#mute, stop notifying"
 [ -f "$CONF_DIR/config" ] && . "$CONF_DIR/config"
 
 INPUT="$(cat)"
@@ -56,7 +58,15 @@ WATCH_FILE="$STATE_DIR/${SESSION_ID}.watch"
 
 # An empty watch list in tagged mode would be a silence nothing could escape,
 # so fall back to the defaults rather than leaving the inbox permanently dead.
-[ -n "${WATCH_TAGS// /}" ] || WATCH_TAGS="#notify #inbox #watch #agent-inbox"
+[ -n "${WATCH_TAGS// /}" ] || WATCH_TAGS="#notify, #inbox, #watch, #agent-inbox, watch this, notify me"
+
+# One tag per line. Commas win when present, so a tag can contain spaces;
+# otherwise whitespace separates, which keeps the "#a #b" form working.
+split_tags() {
+  local raw="$1" sep=' '
+  case "$raw" in *,*) sep=',' ;; esac
+  printf '%s' "$raw" | tr "$sep" '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
 
 record_tags() { # $1 = the text the user just submitted
   local text tag
@@ -65,19 +75,25 @@ record_tags() { # $1 = the text the user just submitted
   # rather than strict.
   text="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
 
-  if [ -n "${MUTE_TAG// /}" ]; then
+  while IFS= read -r tag; do
+    [ -n "$tag" ] || continue
     case "$text" in
-      *"$(printf '%s' "$MUTE_TAG" | tr '[:upper:]' '[:lower:]')"*)
+      *"$(printf '%s' "$tag" | tr '[:upper:]' '[:lower:]')"*)
         printf 'off' > "$WATCH_FILE"; return 0 ;;
     esac
-  fi
+  done <<EOF
+$(split_tags "$MUTE_TAG")
+EOF
 
-  for tag in $WATCH_TAGS; do
+  while IFS= read -r tag; do
+    [ -n "$tag" ] || continue
     case "$text" in
       *"$(printf '%s' "$tag" | tr '[:upper:]' '[:lower:]')"*)
         printf 'on' > "$WATCH_FILE"; return 0 ;;
     esac
-  done
+  done <<EOF
+$(split_tags "$WATCH_TAGS")
+EOF
 }
 
 # Should this session report? Sessions with no tag follow WATCH_MODE.

@@ -147,5 +147,75 @@ out="$(run notification "$(notif_payload)")"
 case "$out" in *"WOULD SEND"*) ok "an empty mute tag does not silence everything";;
   *) fail "an empty mute tag does not silence everything" "got: $out";; esac
 
+# --- spoken phrases, which is what dictation can actually produce ---
+new_home
+cat > "$HOME/.agent-inbox/config" <<'CFG'
+WATCH_MODE=tagged
+WATCH_TAGS="watch this, notify me"
+MUTE_TAG="stop notifying"
+CFG
+run prompt "$(prompt_payload 'ok please watch this one for me')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+case "$out" in *"WOULD SEND"*) ok "a spoken phrase enables the conversation";;
+  *) fail "a spoken phrase enables the conversation" "got: $out";; esac
+
+run prompt "$(prompt_payload 'you can stop notifying me about it')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+[ -z "$out" ] && ok "a spoken phrase silences the conversation" \
+  || fail "a spoken phrase silences the conversation" "got: $out"
+
+# The bug phrases were built to fix: a phrase must not match on one loose word.
+new_home
+cat > "$HOME/.agent-inbox/config" <<'CFG'
+WATCH_MODE=tagged
+WATCH_TAGS="watch this, notify me"
+CFG
+run prompt "$(prompt_payload 'lets do this')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+[ -z "$out" ] && ok "a phrase does not match on a single loose word" \
+  || fail "a phrase does not match on a single loose word" "got: $out"
+
+run prompt "$(prompt_payload 'can you watch the build')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+[ -z "$out" ] && ok "a phrase needs the whole phrase, not its first word" \
+  || fail "a phrase needs the whole phrase, not its first word" "got: $out"
+
+# --- the space separated form still works, so nobody's config breaks ---
+new_home
+cat > "$HOME/.agent-inbox/config" <<'CFG'
+WATCH_MODE=tagged
+WATCH_TAGS="#alpha #beta"
+CFG
+run prompt "$(prompt_payload 'using #beta here')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+case "$out" in *"WOULD SEND"*) ok "the space separated form still works";;
+  *) fail "the space separated form still works" "got: $out";; esac
+
+# --- the shipped defaults must work when dictated ---
+new_home
+printf 'WATCH_MODE=tagged\n' > "$HOME/.agent-inbox/config"
+run prompt "$(prompt_payload 'watch this one please')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+case "$out" in *"WOULD SEND"*) ok "a dictated phrase works with no config at all";;
+  *) fail "a dictated phrase works with no config at all" "got: $out";; esac
+
+run prompt "$(prompt_payload 'you can stop notifying now')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+[ -z "$out" ] && ok "the dictated mute phrase works with no config at all" \
+  || fail "the dictated mute phrase works with no config at all" "got: $out"
+
+# The typed forms must survive alongside the spoken ones.
+new_home
+printf 'WATCH_MODE=tagged\n' > "$HOME/.agent-inbox/config"
+run prompt "$(prompt_payload 'typed #inbox still counts')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+case "$out" in *"WOULD SEND"*) ok "typed tags still work alongside spoken ones";;
+  *) fail "typed tags still work alongside spoken ones" "got: $out";; esac
+
+run prompt "$(prompt_payload 'and #mute still counts')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+[ -z "$out" ] && ok "the typed mute tag still works alongside the spoken one" \
+  || fail "the typed mute tag still works alongside the spoken one" "got: $out"
+
 echo
 echo "$PASS checks passed"
