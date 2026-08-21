@@ -12,8 +12,8 @@ struct SenderSnapshot {
     var minSeconds: Int = 45
     var hostLabel: String = "mac"
     var watchMode: String = "all"
-    var watchTags: String = "#notify #inbox #watch #agent-inbox"
-    var muteTag: String = "#mute"
+    var watchTags: String = "#notify, #inbox, #watch, #agent-inbox, watch this, notify me"
+    var muteTag: String = "#mute, stop notifying"
 }
 
 /// `~/.agent-inbox/` is the contract between this app and the shell senders.

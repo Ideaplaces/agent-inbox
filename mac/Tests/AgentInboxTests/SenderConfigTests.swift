@@ -75,13 +75,28 @@ final class SenderConfigTests: XCTestCase {
         XCTAssertEqual(pairs["MUTE_TAG"], "#quiet")
     }
 
-    func testTagNormalizationTidiesWhatTheUserTyped() {
-        // Commas and stray whitespace are what people actually type; the
-        // sender splits on spaces, so store what it will split on.
+    func testTagNormalizationKeepsPhrasesIntact() {
+        // A comma means the tags are phrases, so the spaces inside one are
+        // part of the tag. Losing them is what made "watch this" match the
+        // word "this" on its own.
         XCTAssertEqual(
-            AppSettings.normalizeTags("  #ping,  #follow   #watch "),
-            "#ping #follow #watch")
+            AppSettings.normalizeTags("  watch this ,  notify me  "),
+            "watch this, notify me")
+        // No comma means the older space separated form.
+        XCTAssertEqual(
+            AppSettings.normalizeTags("  #ping   #follow "),
+            "#ping #follow")
         XCTAssertEqual(AppSettings.normalizeTags("   "), "")
+        XCTAssertEqual(AppSettings.normalizeTags("#a, , #b"), "#a, #b")
+    }
+
+    func testShippedDefaultsCarryASpokenForm() {
+        // Dictation cannot produce a "#", so a default set of typed-only tags
+        // would leave a voice user with no way to tag anything.
+        XCTAssertTrue(AppSettings.defaultWatchTags.contains("watch this"))
+        XCTAssertTrue(AppSettings.defaultMuteTag.contains("stop notifying"))
+        XCTAssertTrue(AppSettings.defaultWatchTags.contains("#notify"))
+        XCTAssertTrue(AppSettings.defaultMuteTag.contains("#mute"))
     }
 
     func testHandWrittenConfigIsBackedUpOnceBeforeBeingReplaced() throws {

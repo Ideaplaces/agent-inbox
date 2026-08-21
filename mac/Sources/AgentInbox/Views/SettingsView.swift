@@ -108,7 +108,7 @@ private struct GeneralSettings: View {
                         .onSubmit { settings.muteTag = AppSettings.normalizeTags(settings.muteTag) }
                 }
                 HStack {
-                    Text("Typed anywhere in a message. Several watch tags, space separated; case does not matter, and the most recent tag wins.")
+                    Text("Typed or said anywhere in a message. Separate several with commas, which lets a tag be a phrase like \"watch this\" for dictation. Case does not matter and the most recent tag wins.")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
