@@ -118,9 +118,13 @@ last_assistant_text() { # $1 max chars
 # Extract real user-message texts from transcript lines on stdin, skipping
 # system wrappers (<local-command-caveat>, <command-name>) and tool-result
 # entries that also arrive with type=="user". $1 = "first" or "last".
+# An attached screenshot lands in the transcript as a long cache path, which
+# would otherwise fill the whole line the reader actually needs.
 _user_text() {
   jq -Rrs '[split("\n")[] | fromjson? | select(.type=="user") | .message.content | if type=="array" then ([.[]? | objects | select(.type=="text") | .text] | join(" ")) else tostring end | gsub("^\\s+";"") | select(length>0) | select(startswith("<") | not)] | '"$1"' // ""' 2>/dev/null \
-    | tr '\n' ' ' | sed 's/[⎿⧉].*//' | head -c 150
+    | tr '\n' ' ' | sed 's/[⎿⧉].*//' \
+    | sed 's/\[Image: source:[^]]*\]//g; s/\[Image #[0-9]*\]//g' \
+    | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | head -c 150
 }
 
 # What this chat means, as up to two lines:

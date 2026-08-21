@@ -227,14 +227,14 @@ private struct ItemRow: View {
                         .foregroundStyle(.tertiary)
                 }
                 if let subtitle = item.subtitle {
-                    Text(subtitle)
+                    Text(MarkdownText.attributed(subtitle))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .lineLimit(4)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let waiting = item.waitingOn {
-                    Text(waiting)
+                    Text(MarkdownText.attributed(waiting))
                         .font(.system(size: 12))
                         .foregroundStyle(.primary.opacity(0.75))
                         .lineLimit(4)

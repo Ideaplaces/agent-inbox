@@ -217,5 +217,20 @@ out="$(run notification "$(notif_payload)")"
 [ -z "$out" ] && ok "the typed mute tag still works alongside the spoken one" \
   || fail "the typed mute tag still works alongside the spoken one" "got: $out"
 
+# --- an attached screenshot must not fill the line ---
+UT="$(mktemp)"; sed -n '/^# An attached screenshot/,/^}/p' "$HERE/notify.sh" > "$UT"
+img='{"type":"user","message":{"content":[{"type":"text","text":"[Image: source: /Users/x/.claude/image-cache/abc/9.png] Do you know why nothing appears?"}]}}'
+got="$(printf '%s\n' "$img" | bash -c "source $UT; _user_text last")"
+[ "$got" = "Do you know why nothing appears?" ] \
+  && ok "an image cache path is stripped from the snippet" \
+  || fail "an image cache path is stripped from the snippet" "got: [$got]"
+
+plainmsg='{"type":"user","message":{"content":[{"type":"text","text":"just a normal message"}]}}'
+got="$(printf '%s\n' "$plainmsg" | bash -c "source $UT; _user_text last")"
+[ "$got" = "just a normal message" ] \
+  && ok "ordinary text is left alone" \
+  || fail "ordinary text is left alone" "got: [$got]"
+rm -f "$UT"
+
 echo
 echo "$PASS checks passed"
