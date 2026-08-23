@@ -25,7 +25,14 @@ permissions:
 
 jobs:
   release:
-    runs-on: macos-14
+    # The same Mac that runs CI. The SDK a menubar app links against decides
+    # how its window behaves at runtime, and the hosted macos images are
+    # several releases behind: 0.1.8 was built against the macOS 14.5 SDK, and
+    # on macOS 26 that binary sizes its MenuBarExtra window once and never
+    # shrinks it again, so the panel floats centred in a stale frame. Building
+    # on a current Mac is the fix. The cost is that a tag only builds while
+    # that Mac is awake; the job queues until it is.
+    runs-on: [self-hosted, macOS, ARM64]
     env:
       MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
       MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
@@ -68,7 +75,13 @@ jobs:
             -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: \
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
-          security list-keychains -d user -s "$KEYCHAIN" login.keychain
+          # Prepend, never replace. On a hosted image the search list is
+          # disposable; on the self-hosted Mac it is the developer's own, and
+          # overwriting it with "$KEYCHAIN login.keychain" drops every other
+          # keychain they have until the next login. Save it so the cleanup
+          # step can put it back verbatim.
+          security list-keychains -d user | sed 's/^ *"//;s/"$//' > "$RUNNER_TEMP/keychains.before"
+          security list-keychains -d user -s "$KEYCHAIN" $(cat "$RUNNER_TEMP/keychains.before")
           rm -f "$RUNNER_TEMP/cert.p12"
 
       - name: Unpack the notarization key
@@ -96,6 +109,17 @@ jobs:
       - name: Remove the signing keys
         if: always()
         run: rm -f "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/sparkle.key"
+
+      # The build keychain and the search list outlive the job on a
+      # self-hosted Mac, so both have to be undone whatever happened above.
+      - name: Restore the keychain search list
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/keychains.before" ]; then
+            security list-keychains -d user -s $(cat "$RUNNER_TEMP/keychains.before")
+            rm -f "$RUNNER_TEMP/keychains.before"
+          fi
+          security delete-keychain "$RUNNER_TEMP/build.keychain" 2>/dev/null || true
 
       - name: Publish release
         uses: softprops/action-gh-release@v2

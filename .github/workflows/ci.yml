@@ -8,7 +8,12 @@ on:
 jobs:
   mac-app:
     name: Mac app
-    runs-on: macos-14
+    # Chip's MacBook, registered as a repo runner. The hosted macos images lag
+    # the SDK the app is actually used on, and a menubar app's layout comes
+    # from the SDK it was built against, so building on a current Mac is not a
+    # speed optimisation, it is what makes the shipped window match the one we
+    # test. Falls back to nothing if the machine is asleep: the job queues.
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4

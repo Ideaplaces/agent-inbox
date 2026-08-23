@@ -42,6 +42,12 @@ curl -s https://raw.githubusercontent.com/Ideaplaces/agent-inbox/main/appcast.xm
 | A `v*` tag | Sign, notarize and staple app + DMG, publish release, commit appcast |
 | Every 30 min, in `Ideaplaces/homebrew-tap` | The tap bumps its own casks from the latest release |
 
+Both Mac jobs run on a **self-hosted runner**, Chip's MacBook, labelled
+`self-hosted, macOS, ARM64, chip-macbook, xcode26` and registered against this
+repo. A tag therefore only builds while that machine is awake; until then the
+job queues rather than failing. That tradeoff is deliberate, see the SDK note
+below.
+
 **The tap updates itself; nothing pushes to it.** A cross-repo push needs a
 credential the org cannot issue, so the direction was inverted: a workflow can
 always write to its own repository, and reading a public repo's releases needs no
@@ -114,6 +120,16 @@ docs.ideaplaces.com/devops/macos-app-signing.
   was not found.` broke the v0.1.5 release on a Sparkle XPC service. The
   timestamp is mandatory for notarization, so signing retries with backoff
   rather than failing the release.
+- **Build against the SDK the app will run on.** 0.1.8 was built on the hosted
+  `macos-14` image, so it links against the macOS 14.5 SDK. On macOS 26 that
+  binary grows its `MenuBarExtra` window and never shrinks it again: the window
+  stays at the tallest list of the session (measured at 560x472) while the
+  content draws its real height, and SwiftUI centres the content in the
+  leftover space. The result is a menu floating ~140pt below the menubar with
+  dead margin above and below, which reads as a padding bug and is not one. The
+  same source built with the macOS 26 SDK goes 652 -> 157 across the same
+  shrink. Check with `vtool -arch arm64 -show-build <binary> | grep sdk` before
+  chasing a layout problem that only appears on one Mac.
 - **Test the binary you think you are testing.** A `--configure` flag appeared to
   hang through several rounds of debugging because `/Applications` held the
   released build, which predated the flag.
