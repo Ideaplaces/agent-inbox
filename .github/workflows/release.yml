@@ -25,7 +25,14 @@ permissions:
 
 jobs:
   release:
-    runs-on: macos-14
+    # The same Mac that runs CI. The SDK a menubar app links against decides
+    # how its window behaves at runtime, and the hosted macos images are
+    # several releases behind: 0.1.8 was built against the macOS 14.5 SDK, and
+    # on macOS 26 that binary sizes its MenuBarExtra window once and never
+    # shrinks it again, so the panel floats centred in a stale frame. Building
+    # on a current Mac is the fix. The cost is that a tag only builds while
+    # that Mac is awake; the job queues until it is.
+    runs-on: [self-hosted, macOS, ARM64]
     env:
       MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
       MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
