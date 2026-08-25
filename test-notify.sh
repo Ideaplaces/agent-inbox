@@ -232,5 +232,42 @@ got="$(printf '%s\n' "$plainmsg" | bash -c "source $UT; _user_text last")"
   || fail "ordinary text is left alone" "got: [$got]"
 rm -f "$UT"
 
+# --- the thread line must survive a transcript that was never compacted ---
+#
+# The bug this pins: `"type":"summary"` is only written when a session is
+# compacted, and most sessions never are, so every notification went out with
+# a last message and no subject. `ai-title` is present from the first turn.
+CT="$(mktemp)"
+sed -n '/^# An attached screenshot/,/^}/p' "$HERE/notify.sh" > "$CT"
+sed -n '/^session_context()/,/^}/p' "$HERE/notify.sh" >> "$CT"
+
+TR="$(mktemp)"
+cat > "$TR" <<'TRANSCRIPT'
+{"type":"ai-title","aiTitle":"Menubar padding and the CI runner"}
+{"type":"user","message":{"content":[{"type":"text","text":"I think we don't get sounds."}]}}
+TRANSCRIPT
+got="$(TRANSCRIPT="$TR" bash -c "source $CT; TRANSCRIPT=$TR session_context")"
+case "$got" in
+  *"Menubar padding and the CI runner"*) ok "an uncompacted session still gets a subject line";;
+  *) fail "an uncompacted session still gets a subject line" "got: [$got]";;
+esac
+case "$got" in
+  *"I think we don't get sounds."*) ok "the last message is still carried alongside it";;
+  *) fail "the last message is still carried alongside it" "got: [$got]";;
+esac
+
+# A real summary, once one exists, still wins over the title.
+cat > "$TR" <<'TRANSCRIPT'
+{"type":"ai-title","aiTitle":"a stale title"}
+{"type":"summary","summary":"the compacted summary"}
+{"type":"user","message":{"content":[{"type":"text","text":"carry on"}]}}
+TRANSCRIPT
+got="$(TRANSCRIPT="$TR" bash -c "source $CT; TRANSCRIPT=$TR session_context")"
+case "$got" in
+  *"the compacted summary"*) ok "a real summary still beats the title";;
+  *) fail "a real summary still beats the title" "got: [$got]";;
+esac
+rm -f "$CT" "$TR"
+
 echo
 echo "$PASS checks passed"
