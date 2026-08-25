@@ -267,6 +267,38 @@ case "$got" in
   *"the compacted summary"*) ok "a real summary still beats the title";;
   *) fail "a real summary still beats the title" "got: [$got]";;
 esac
+# --- older Claude Code writes neither entry, and still needs a subject ---
+#
+# The Linux dev boxes run 2.1.12, whose transcripts contain no summary and no
+# ai-title. Without a third fallback the subject line stays empty exactly where
+# most sessions run.
+TR2="$(mktemp)"
+cat > "$TR2" <<'TRANSCRIPT'
+{"type":"user","message":{"content":[{"type":"text","text":"Why is the enum duplicated across three files?"}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"working on it"}]}}
+{"type":"user","message":{"content":[{"type":"text","text":"run the full gate"}]}}
+TRANSCRIPT
+got="$(bash -c "source $CT; TRANSCRIPT=$TR2 session_context")"
+case "$got" in
+  *"Why is the enum duplicated"*) ok "a transcript with no title still gets a subject";;
+  *) fail "a transcript with no title still gets a subject" "got: [$got]";;
+esac
+case "$got" in
+  *"run the full gate"*) ok "and still carries the latest message";;
+  *) fail "and still carries the latest message" "got: [$got]";;
+esac
+
+# One prompt in, origin and latest are the same line; print it once.
+cat > "$TR2" <<'TRANSCRIPT'
+{"type":"user","message":{"content":[{"type":"text","text":"only one message so far"}]}}
+TRANSCRIPT
+got="$(bash -c "source $CT; TRANSCRIPT=$TR2 session_context")"
+count="$(printf '%s' "$got" | grep -c "only one message so far")"
+[ "$count" = "1" ] \
+  && ok "a one-message session does not repeat itself" \
+  || fail "a one-message session does not repeat itself" "got: [$got]"
+rm -f "$TR2"
+
 rm -f "$CT" "$TR"
 
 echo
