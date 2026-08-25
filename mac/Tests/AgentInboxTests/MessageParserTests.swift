@@ -113,3 +113,37 @@ final class MessageParserTests: XCTestCase {
     }
 
 }
+
+/// The subject line reached the app and the menu threw it away.
+///
+/// `subtitle` is a fallback chain, `ask ?? summary ?? detail`, so an item that
+/// carried both a subject and an ask rendered only the ask. Nearly every item
+/// carries both, so the subject was invisible in the menu even once the sender
+/// was fixed to send it.
+final class ItemThreadTests: XCTestCase {
+    private func item(summary: String?, ask: String?, detail: String? = nil) -> InboxItem {
+        InboxItem(
+            id: "1", kind: .needsYou, repo: "r", host: "h", duration: nil,
+            summary: summary, ask: ask, detail: detail, waitingOn: nil,
+            sessionID: nil, cwd: nil, receivedAt: Date(), presenceAtArrival: 0)
+    }
+
+    func testTheSubjectSurvivesAlongsideAnAsk() {
+        let row = item(summary: "NPS analysis", ask: "push it to main")
+        XCTAssertEqual(row.thread, "NPS analysis")
+        XCTAssertEqual(row.subtitle, "push it to main")
+    }
+
+    func testTheSubjectIsNotRepeatedWhenItIsTheOnlyLine() {
+        // summary alone falls through to subtitle, so showing thread too would
+        // print the same sentence twice in one row.
+        let row = item(summary: "NPS analysis", ask: nil)
+        XCTAssertEqual(row.subtitle, "NPS analysis")
+        XCTAssertNil(row.thread)
+    }
+
+    func testAnItemWithNoSubjectHasNoThreadLine() {
+        XCTAssertNil(item(summary: nil, ask: "just this").thread)
+        XCTAssertNil(item(summary: "", ask: "just this").thread)
+    }
+}
