@@ -63,6 +63,17 @@ struct InboxItem: Codable, Identifiable, Equatable {
         return line
     }
 
+    /// What the session is about, shown above the rest of the row.
+    ///
+    /// Kept separate from `subtitle` rather than folded into it: the two
+    /// answer different questions, and a fallback chain silently drops the
+    /// subject on every item that also carries an ask, which is nearly all of
+    /// them. Suppressed when it would only repeat the line below it.
+    var thread: String? {
+        guard let summary, !summary.isEmpty, summary != subtitle else { return nil }
+        return summary
+    }
+
     /// The one line worth showing under the title when space is tight.
     var subtitle: String? {
         ask ?? summary ?? detail

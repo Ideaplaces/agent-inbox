@@ -226,6 +226,13 @@ private struct ItemRow: View {
                         .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
                 }
+                if let thread = item.thread {
+                    Text(thread)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
                 if let subtitle = item.subtitle {
                     Text(MarkdownText.attributed(subtitle))
                         .font(.system(size: 12))
