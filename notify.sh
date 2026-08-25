@@ -146,10 +146,15 @@ session_context() {
     sum="$(tail -n 2000 "$TRANSCRIPT" 2>/dev/null | grep '"type":"ai-title"' | tail -1 \
       | jq -r '.aiTitle // ""' 2>/dev/null | tr '\n' ' ' | head -c 150)"
   fi
+  # Neither entry exists on older Claude Code: the Linux boxes run 2.1.12,
+  # which writes no summary and no ai-title, so both lookups above come back
+  # empty there and the subject line would still never appear. The message the
+  # session opened with is a fair statement of what it is about, and every
+  # transcript on every version has one.
+  [ -z "$sum" ] && sum="$(head -n 200 "$TRANSCRIPT" | _user_text first)"
   ask="$(tail -n 500 "$TRANSCRIPT" | _user_text last)"
-  if [ -z "$sum" ] && [ -z "$ask" ]; then
-    ask="$(head -n 100 "$TRANSCRIPT" | _user_text first)"
-  fi
+  # A session still on its first message would otherwise print it twice.
+  [ "$sum" = "$ask" ] && sum=""
   [ -n "$sum" ] && out="🧵 $sum"
   if [ -n "$ask" ]; then
     [ -n "$out" ] && out="$out
