@@ -128,7 +128,7 @@ _user_text() {
 }
 
 # What this chat means, as up to two lines:
-#   🧵 Claude Code's own conversation summary (what this session has been about)
+#   🧵 what this session is about
 #   🗣 the most recent real user message (what you asked for right now)
 # Long sessions drift far from their first prompt, so recency beats origin;
 # the first prompt is only the last-resort fallback.
@@ -136,6 +136,16 @@ session_context() {
   [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ] || return 0
   local sum ask out=""
   sum="$(grep -m 20 '"type":"summary"' "$TRANSCRIPT" 2>/dev/null | tail -1 | jq -r '.summary // ""' 2>/dev/null | tr '\n' ' ' | head -c 150)"
+  # A summary entry is only written when a session is compacted, and most never
+  # are: across every transcript on this machine the count was zero, so the
+  # thread line has never once been sent and every notification arrived as a
+  # last message with no subject. Claude Code also writes an `ai-title` entry,
+  # which exists from the first turn, so fall back to that. Bounded read: the
+  # entry repeats often and a transcript can be tens of megabytes.
+  if [ -z "$sum" ]; then
+    sum="$(tail -n 2000 "$TRANSCRIPT" 2>/dev/null | grep '"type":"ai-title"' | tail -1 \
+      | jq -r '.aiTitle // ""' 2>/dev/null | tr '\n' ' ' | head -c 150)"
+  fi
   ask="$(tail -n 500 "$TRANSCRIPT" | _user_text last)"
   if [ -z "$sum" ] && [ -z "$ask" ]; then
     ask="$(head -n 100 "$TRANSCRIPT" | _user_text first)"
