@@ -114,3 +114,68 @@ final class SenderConfigTests: XCTestCase {
         XCTAssertEqual(saved, stillSaved)
     }
 }
+
+
+/// The token the sender needs to publish to a self-hosted ntfy.
+///
+/// It is a credential, so it must not land in `config`, which is written 0644
+/// so a sender running as another user can read it. And it has to disappear
+/// when it is cleared: `notify.sh` tests the file with `-s`, so a blanked file
+/// is harmless, but a stale one left behind after moving back to ntfy.sh would
+/// be sent to a server that never asked for it.
+@MainActor
+final class NtfyTokenConfigTests: XCTestCase {
+    private var dir: URL!
+
+    override func setUp() {
+        super.setUp()
+        dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString)
+        SenderConfig.directory = dir
+    }
+
+    override func tearDown() {
+        try? FileManager.default.removeItem(at: dir)
+        super.tearDown()
+    }
+
+    private func write(token: String) {
+        SenderConfig.write(
+            SenderSnapshot(transport: .ntfy, ntfyTopic: "agent-inbox",
+                           ntfyServer: "https://ntfy.example.com:8443", ntfyToken: token))
+    }
+
+    private func contents(_ name: String) -> String? {
+        try? String(contentsOf: dir.appendingPathComponent(name), encoding: .utf8)
+    }
+
+    func testTheTokenIsWrittenWhereTheSenderLooksForIt() {
+        write(token: "tk_abc123")
+        XCTAssertEqual(contents("ntfy-token"), "tk_abc123")
+        XCTAssertEqual(contents("ntfy-topic"), "agent-inbox")
+    }
+
+    func testTheTokenNeverLandsInTheWorldReadableConfig() {
+        write(token: "tk_abc123")
+        XCTAssertFalse(contents("config")?.contains("tk_abc123") ?? false)
+    }
+
+    func testTheTokenFileIsNotWorldReadable() {
+        write(token: "tk_abc123")
+        let mode = (try? FileManager.default.attributesOfItem(
+            atPath: dir.appendingPathComponent("ntfy-token").path)[.posixPermissions]) as? NSNumber
+        XCTAssertEqual(mode?.int16Value, 0o600)
+    }
+
+    func testClearingTheTokenRemovesTheFileRatherThanBlankingIt() {
+        write(token: "tk_abc123")
+        write(token: "")
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: dir.appendingPathComponent("ntfy-token").path))
+    }
+
+    func testTheServerStillReachesTheSender() {
+        write(token: "tk_abc123")
+        XCTAssertTrue(contents("config")?.contains("https://ntfy.example.com:8443") ?? false)
+    }
+}

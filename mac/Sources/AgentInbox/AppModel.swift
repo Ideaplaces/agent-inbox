@@ -137,6 +137,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 if let server = value("--server"), !server.isEmpty {
                     settings.ntfyServer = server
                 }
+                // Optional: ntfy.sh has no accounts, a self-hosted server may
+                // require one. Provisioning a machine has to be one command, so
+                // this cannot be UI-only.
+                if let token = value("--token") {
+                    settings.ntfyToken = token
+                }
                 settings.transport = .ntfy
                 print("configured ntfy topic")
             case "discord":

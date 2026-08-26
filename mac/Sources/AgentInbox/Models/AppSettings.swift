@@ -54,6 +54,13 @@ final class AppSettings {
     var discordBotToken: String {
         didSet { Keychain.set(discordBotToken, for: "discord-bot-token") }
     }
+    /// Bearer token for a self-hosted ntfy. Empty for ntfy.sh, which has no
+    /// accounts. In the Keychain rather than UserDefaults because it is a
+    /// credential, and mirrored to the sender's own file by `sync()`.
+    var ntfyToken: String {
+        didSet { Keychain.set(ntfyToken, for: "ntfy-token"); sync() }
+    }
+
     var discordWebhookURL: String {
         didSet { Keychain.set(discordWebhookURL, for: "discord-webhook-url"); sync() }
     }
@@ -118,6 +125,7 @@ final class AppSettings {
         ntfyTopic = defaults.string(forKey: "ntfyTopic") ?? ""
         discordChannelID = defaults.string(forKey: "discordChannelID") ?? ""
         discordGuildID = defaults.string(forKey: "discordGuildID") ?? ""
+        ntfyToken = Keychain.get("ntfy-token") ?? ""
         discordBotToken = Keychain.get("discord-bot-token") ?? ""
         discordWebhookURL = Keychain.get("discord-webhook-url") ?? ""
         pollSeconds = defaults.integer(forKey: "pollSeconds")
@@ -199,6 +207,7 @@ final class AppSettings {
             transport: transport,
             ntfyTopic: ntfyTopic,
             ntfyServer: ntfyServer,
+            ntfyToken: ntfyToken,
             discordWebhookURL: discordWebhookURL,
             discordChannelID: discordChannelID,
             discordGuildID: discordGuildID,

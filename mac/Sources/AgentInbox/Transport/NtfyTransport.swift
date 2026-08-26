@@ -3,9 +3,14 @@ import Foundation
 /// ntfy.sh needs no account and no bot: the topic name is the channel. That
 /// makes it the zero-friction default, at the cost of the topic being the
 /// only secret protecting the message bodies.
+///
+/// A self-hosted server can close that gap by requiring a token, and ours does:
+/// it runs deny-all, so the topic name grants nothing on its own. The token is
+/// optional so the same transport still serves ntfy.sh unchanged.
 struct NtfyTransport: Transport {
     let server: String
     let topic: String
+    var token: String = ""
 
     private struct Event: Decodable {
         let id: String
@@ -26,6 +31,9 @@ struct NtfyTransport: Transport {
         }
         var request = URLRequest(url: url)
         request.timeoutInterval = 20
+        if !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw TransportError.badResponse(0) }
