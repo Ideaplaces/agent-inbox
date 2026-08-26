@@ -56,7 +56,9 @@ final class Poller {
             return nil
         case .ntfy:
             guard !settings.ntfyTopic.isEmpty else { return nil }
-            return NtfyTransport(server: settings.ntfyServer, topic: settings.ntfyTopic)
+            return NtfyTransport(
+                server: settings.ntfyServer, topic: settings.ntfyTopic,
+                token: settings.ntfyToken)
         case .discord:
             guard !settings.discordBotToken.isEmpty, !settings.discordChannelID.isEmpty else {
                 return nil

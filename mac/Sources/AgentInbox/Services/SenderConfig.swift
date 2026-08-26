@@ -6,6 +6,7 @@ struct SenderSnapshot {
     var transport: TransportKind
     var ntfyTopic: String = ""
     var ntfyServer: String = "https://ntfy.sh"
+    var ntfyToken: String = ""
     var discordWebhookURL: String = ""
     var discordChannelID: String = ""
     var discordGuildID: String = ""
@@ -83,6 +84,17 @@ enum SenderConfig {
         switch settings.transport {
         case .ntfy:
             write(settings.ntfyTopic, to: "ntfy-topic")
+            // Its own file, not a line in `config`: config is written 0644 so
+            // a sender running as another user can read it, and this is a
+            // credential. Removed rather than blanked when there is none, so a
+            // move from a self-hosted server back to ntfy.sh does not leave a
+            // stale token on disk.
+            let tokenFile = directory.appendingPathComponent("ntfy-token")
+            if settings.ntfyToken.isEmpty {
+                try? FileManager.default.removeItem(at: tokenFile)
+            } else {
+                write(settings.ntfyToken, to: "ntfy-token")
+            }
         case .discord:
             if !settings.discordWebhookURL.isEmpty {
                 write(settings.discordWebhookURL, to: "webhook-url")

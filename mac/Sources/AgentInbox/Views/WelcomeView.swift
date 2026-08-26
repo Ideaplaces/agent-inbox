@@ -187,6 +187,17 @@ struct TransportPicker: View {
                             .font(.system(size: 11))
                     }
                     .font(.system(size: 11))
+                    // Only meaningful on a self-hosted server. ntfy.sh has no
+                    // accounts, so showing this against the default would
+                    // invite people to fill in a field that does nothing.
+                    if settings.ntfyServer != "https://ntfy.sh" {
+                        LabeledContent("Token") {
+                            SecureField("optional", text: $settings.ntfyToken)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 11))
+                        }
+                        .font(.system(size: 11))
+                    }
                 }
             case .discord:
                 VStack(alignment: .leading, spacing: 6) {
