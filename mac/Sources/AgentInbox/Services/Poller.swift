@@ -35,6 +35,49 @@ final class Poller {
         self.presence = presence
     }
 
+    /// Fold one poll's messages into the store, in arrival order, and return
+    /// the ones worth announcing.
+    ///
+    /// Order is the whole point. Control events are instructions rather than
+    /// entries: applied, never shown, and an unrecognised one dropped rather
+    /// than drawn as a row with a sentinel for a title. But they cannot all be
+    /// applied up front. A turn that ends and is then typed into publishes an
+    /// event and its clear seconds apart, so both land in one poll; clearing
+    /// first would run against a store that does not hold the row yet, and the
+    /// row would then never leave.
+    ///
+    /// Pending items are therefore flushed before each control, which makes the
+    /// sequence inside a poll mean what it did on the wire.
+    ///
+    /// Nothing is announced for a conversation you are already in: the clear
+    /// said you are there, so a banner for it would be about something you are
+    /// looking at.
+    @discardableResult
+    func apply(_ messages: [TransportMessage]) -> [InboxItem] {
+        var pending: [TransportMessage] = []
+        var arrived: [InboxItem] = []
+
+        func flushPending() {
+            guard !pending.isEmpty else { return }
+            arrived += store.add(
+                pending.compactMap { MessageParser.parse($0, presence: presence.seconds) })
+            pending.removeAll()
+        }
+
+        for message in messages {
+            guard ControlEvent.isControl(message) else {
+                pending.append(message)
+                continue
+            }
+            flushPending()
+            if case .clearSession(let session)? = ControlEvent.parse(message) {
+                store.markSessionRead(session)
+            }
+        }
+        flushPending()
+        return arrived.filter { store.item(id: $0.id)?.isRead == false }
+    }
+
     /// Identifies the channel a cursor belongs to. Changing topic or channel
     /// changes the key, which retires the old cursor automatically.
     private var cursorKey: String {
@@ -116,26 +159,10 @@ final class Poller {
             consecutiveFailures = 0
             status = .connected(Date())
 
-            // Control events are instructions, not entries: they are applied
-            // and never shown. Handled before parsing so an unrecognised one is
-            // dropped rather than rendered as a row with a sentinel for a title.
-            var events: [TransportMessage] = []
-            for message in result.messages {
-                guard ControlEvent.isControl(message) else {
-                    events.append(message)
-                    continue
-                }
-                if case .clearSession(let session)? = ControlEvent.parse(message) {
-                    store.markSessionRead(session)
-                }
-            }
-            let parsed = events.compactMap {
-                MessageParser.parse($0, presence: presence.seconds)
-            }
-            let fresh = store.add(parsed)
-            for item in fresh {
+            for item in apply(result.messages) {
                 Notifier.post(item, soundName: settings.soundName)
             }
+
         } catch {
             consecutiveFailures += 1
             // One blip on a laptop that just woke is not worth a red dot.
