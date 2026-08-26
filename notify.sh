@@ -278,9 +278,21 @@ NTFY_SERVER="${NTFY_SERVER:-https://ntfy.sh}"
 if [ -z "${NTFY_TOPIC:-}" ] && [ -s "$CONF_DIR/ntfy-topic" ]; then
   NTFY_TOPIC="$(cat "$CONF_DIR/ntfy-topic")"
 fi
+# A self-hosted server can require auth, and ours does: it runs deny-all so a
+# leaked topic name is not access. Public ntfy.sh needs none, so the header is
+# added only when a token exists and the sender keeps working either way.
+#
+# Kept in its own file rather than in `config`, because config is world-readable
+# by design (the app rewrites it) and this is a credential.
+if [ -z "${NTFY_TOKEN:-}" ] && [ -s "$CONF_DIR/ntfy-token" ]; then
+  NTFY_TOKEN="$(cat "$CONF_DIR/ntfy-token")"
+fi
 if [ -n "${NTFY_TOPIC:-}" ]; then
   PRIO="default"; [ "$KIND" = "notification" ] && PRIO="high"
+  NTFY_AUTH=()
+  [ -n "${NTFY_TOKEN:-}" ] && NTFY_AUTH=(-H "Authorization: Bearer $NTFY_TOKEN")
   curl -m 5 -s -o /dev/null \
+    "${NTFY_AUTH[@]+"${NTFY_AUTH[@]}"}" \
     -H "Title: $TITLE" -H "Priority: $PRIO" \
     -d "$BODY
 $FOOTER" "$NTFY_SERVER/$NTFY_TOPIC" || true

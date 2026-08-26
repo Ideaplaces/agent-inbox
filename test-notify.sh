@@ -339,6 +339,53 @@ case "$out" in *"WOULD SEND"*) ok "a question past the body cut is still seen";;
   *) fail "a question past the body cut is still seen" "got: $out";; esac
 rm -f "$TR3"
 
+# --- ntfy auth: the token is sent when there is one, and only then ---
+#
+# Our own server runs deny-all, so an unauthenticated publish is a 403 and the
+# session reports into nothing. Public ntfy.sh takes no token at all, so the
+# header has to be conditional rather than always present. Dry-run exits before
+# the transports, so this stubs curl and reads back what would have been sent.
+stub_curl_home() {
+  new_home
+  STUB="$HOME/bin"
+  mkdir -p "$STUB"
+  cat > "$STUB/curl" <<'STUBEOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >> "$CURL_ARGS"
+exit 0
+STUBEOF
+  chmod +x "$STUB/curl"
+  export CURL_ARGS="$HOME/curl-args.txt"
+  : > "$CURL_ARGS"
+  printf 'agent-inbox' > "$HOME/.agent-inbox/ntfy-topic"
+  printf 'NTFY_SERVER="https://ntfy.example.com:8443"\n' > "$HOME/.agent-inbox/config"
+}
+
+send_for_real() { printf '%s' "$2" | PATH="$STUB:$PATH" bash "$NOTIFY" "$1" >/dev/null 2>&1; }
+
+stub_curl_home
+printf 'tk_secrettoken' > "$HOME/.agent-inbox/ntfy-token"
+send_for_real notification "$(notif_payload)"
+if grep -q "Authorization: Bearer tk_secrettoken" "$CURL_ARGS"; then
+  ok "a configured token is sent as a bearer header"
+else
+  fail "a configured token is sent as a bearer header" "args: $(tr '\n' ' ' < "$CURL_ARGS")"
+fi
+grep -q "https://ntfy.example.com:8443/agent-inbox" "$CURL_ARGS" \
+  && ok "the configured server and topic are used" \
+  || fail "the configured server and topic are used" "args: $(tr '\n' ' ' < "$CURL_ARGS")"
+
+stub_curl_home
+send_for_real notification "$(notif_payload)"
+if grep -q "Authorization:" "$CURL_ARGS"; then
+  fail "no token means no auth header, so ntfy.sh still works" "args: $(tr '\n' ' ' < "$CURL_ARGS")"
+else
+  ok "no token means no auth header, so ntfy.sh still works"
+fi
+grep -q "/agent-inbox" "$CURL_ARGS" \
+  && ok "and the message is still published" \
+  || fail "and the message is still published" "args: $(tr '\n' ' ' < "$CURL_ARGS")"
+
 rm -f "$CT" "$TR"
 
 echo
