@@ -33,6 +33,24 @@ WATCH_TAGS="#notify, #inbox, #watch, #agent-inbox, watch this, notify me"
 MUTE_TAG="#mute, stop notifying"
 [ -f "$CONF_DIR/config" ] && . "$CONF_DIR/config"
 
+# The exact title a control event carries. A real event's title is
+# "<symbol> <repo> @ <host>", so nothing legitimate can collide with it.
+CONTROL_TITLE="agent-inbox:control"
+
+# ntfy settings, read on demand so both the normal send and send_control get
+# them without either depending on the other having run first.
+_load_ntfy_config() {
+  NTFY_SERVER="${NTFY_SERVER:-https://ntfy.sh}"
+  if [ -z "${NTFY_TOPIC:-}" ] && [ -s "$CONF_DIR/ntfy-topic" ]; then
+    NTFY_TOPIC="$(cat "$CONF_DIR/ntfy-topic")"
+  fi
+  # Kept out of `config`, which the app writes world-readable, because it is a
+  # credential.
+  if [ -z "${NTFY_TOKEN:-}" ] && [ -s "$CONF_DIR/ntfy-token" ]; then
+    NTFY_TOKEN="$(cat "$CONF_DIR/ntfy-token")"
+  fi
+}
+
 INPUT="$(cat)"
 SESSION_ID="$(printf '%s' "$INPUT" | jq -r '.session_id // empty')"
 CWD="$(printf '%s' "$INPUT" | jq -r '.cwd // empty')"
@@ -147,6 +165,24 @@ agent_asked_a_question() {
   esac
 }
 
+# Tell the inbox to do something, rather than showing up in it.
+#
+# Control events ride the same topic as everything else and are told apart by an
+# exact title: a real event's title always carries a repo and an @host, so the
+# two can never be confused. ntfy only, deliberately. Discord is a record of
+# what happened, and "the user started typing" is not an event worth a permanent
+# row in it.
+send_control() { # $1 = the instruction
+  _load_ntfy_config
+  [ -n "${NTFY_TOPIC:-}" ] || return 0
+  local auth=()
+  [ -n "${NTFY_TOKEN:-}" ] && auth=(-H "Authorization: Bearer $NTFY_TOKEN")
+  curl -m 5 -s -o /dev/null \
+    "${auth[@]+"${auth[@]}"}" \
+    -H "Title: $CONTROL_TITLE" -H "Priority: min" \
+    -d "$1" "$NTFY_SERVER/$NTFY_TOPIC" || true
+}
+
 # What this chat means, as up to two lines:
 #   🧵 what this session is about
 #   🗣 the most recent real user message (what you asked for right now)
@@ -189,6 +225,19 @@ case "$KIND" in
     # Record when the user handed work to the agent; used to skip quick turns.
     [ -n "$SESSION_ID" ] && printf '%s' "$NOW" > "$STATE_DIR/$SESSION_ID.start"
     record_tags "$(printf '%s' "$INPUT" | jq -r '.prompt // empty')"
+    # Typing in a conversation is proof you have seen it, so its row in the
+    # inbox is answered and should go. Only sent when this session actually has
+    # something outstanding: without the marker every prompt would publish a
+    # clear for a session the inbox has never heard of.
+    if [ -n "$SESSION_ID" ] && [ -f "$STATE_DIR/$SESSION_ID.notified" ]; then
+      # The same eight characters the footer carries, because that is all the
+      # app ever sees: it reads the session id out of "session ${SESSION_ID:0:8}"
+      # and stores the truncation. Sending the full id here would be an
+      # instruction to clear a session the inbox has never heard of, and it
+      # would fail silently, which is the worst way for this to be wrong.
+      send_control "clear ${SESSION_ID:0:8}"
+      rm -f "$STATE_DIR/$SESSION_ID.notified"
+    fi
     exit 0
     ;;
 
@@ -274,19 +323,13 @@ fi
 
 # ntfy (https://ntfy.sh): zero-setup pub/sub — the topic name IS the channel.
 # Configure via NTFY_TOPIC in ~/.agent-inbox/config or ~/.agent-inbox/ntfy-topic.
-NTFY_SERVER="${NTFY_SERVER:-https://ntfy.sh}"
-if [ -z "${NTFY_TOPIC:-}" ] && [ -s "$CONF_DIR/ntfy-topic" ]; then
-  NTFY_TOPIC="$(cat "$CONF_DIR/ntfy-topic")"
-fi
+_load_ntfy_config
 # A self-hosted server can require auth, and ours does: it runs deny-all so a
 # leaked topic name is not access. Public ntfy.sh needs none, so the header is
 # added only when a token exists and the sender keeps working either way.
 #
 # Kept in its own file rather than in `config`, because config is world-readable
 # by design (the app rewrites it) and this is a credential.
-if [ -z "${NTFY_TOKEN:-}" ] && [ -s "$CONF_DIR/ntfy-token" ]; then
-  NTFY_TOKEN="$(cat "$CONF_DIR/ntfy-token")"
-fi
 if [ -n "${NTFY_TOPIC:-}" ]; then
   PRIO="default"; [ "$KIND" = "notification" ] && PRIO="high"
   NTFY_AUTH=()
@@ -297,4 +340,10 @@ if [ -n "${NTFY_TOPIC:-}" ]; then
     -d "$BODY
 $FOOTER" "$NTFY_SERVER/$NTFY_TOPIC" || true
 fi
+
+# Remember that this session now has a row waiting, so the next prompt knows
+# there is something to clear. Written last, after the transports, so a session
+# that reported into nothing does not later publish a clear for a row that was
+# never created.
+[ -n "$SESSION_ID" ] && : > "$STATE_DIR/$SESSION_ID.notified"
 exit 0

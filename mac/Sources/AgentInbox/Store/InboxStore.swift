@@ -80,6 +80,21 @@ final class InboxStore {
         save()
     }
 
+    /// Retire everything waiting from one conversation.
+    ///
+    /// Called when the sender reports that you typed in it: the row is answered
+    /// by the fact that you are there, so it should not still be asking.
+    func markSessionRead(_ sessionID: String) {
+        guard !sessionID.isEmpty else { return }
+        var changed = false
+        for index in items.indices
+        where !items[index].isRead && items[index].sessionID == sessionID {
+            items[index].isRead = true
+            changed = true
+        }
+        if changed { save() }
+    }
+
     func markAllRead() {
         for index in items.indices { items[index].isRead = true }
         save()
