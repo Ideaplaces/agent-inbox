@@ -299,6 +299,46 @@ count="$(printf '%s' "$got" | grep -c "only one message so far")"
   || fail "a one-message session does not repeat itself" "got: [$got]"
 rm -f "$TR2"
 
+# --- the hand must mean blocked, not idle ---
+#
+# Claude Code fires the Notification hook 60 seconds after a turn ends whether
+# or not anything was asked. Every needsYou item on this machine was that idle
+# timer: 13 of 13 arrived 60-80s after a finished item and repeated it under a
+# hand, so the marker carried no information at all.
+TR3="$(mktemp)"
+mk_transcript() { # $1 = the agent's closing line
+  cat > "$TR3" <<TRANSCRIPT
+{"type":"user","message":{"content":[{"type":"text","text":"look at the listing"}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"$1"}]}}
+TRANSCRIPT
+}
+notif_with() { printf '{"session_id":"q1","cwd":"/tmp/repo","transcript_path":"%s","message":"%s"}' "$TR3" "$2"; }
+
+new_home
+mk_transcript "Same car, same seller. It is a relist, not a new car."
+out="$(run notification "$(notif_with x 'Claude is waiting for your input')")"
+[ -z "$out" ] && ok "an idle timer with no question raises no hand" \
+  || fail "an idle timer with no question raises no hand" "got: $out"
+
+mk_transcript "Which of those three should I keep?"
+out="$(run notification "$(notif_with x 'Claude is waiting for your input')")"
+case "$out" in *"WOULD SEND"*) ok "an idle timer after a real question still raises one";;
+  *) fail "an idle timer after a real question still raises one" "got: $out";; esac
+
+# A permission prompt is a real block whatever the last line looks like.
+mk_transcript "Running the migration now."
+out="$(run notification "$(notif_with x 'Claude needs your permission to use Bash')")"
+case "$out" in *"WOULD SEND"*) ok "a permission request always raises a hand";;
+  *) fail "a permission request always raises a hand" "got: $out";; esac
+
+# The question mark sits past the body truncation, so it must be read untruncated.
+long="$(printf 'a%.0s' $(seq 1 500))"
+mk_transcript "$long Should I go ahead?"
+out="$(run notification "$(notif_with x 'Claude is waiting for your input')")"
+case "$out" in *"WOULD SEND"*) ok "a question past the body cut is still seen";;
+  *) fail "a question past the body cut is still seen" "got: $out";; esac
+rm -f "$TR3"
+
 rm -f "$CT" "$TR"
 
 echo
