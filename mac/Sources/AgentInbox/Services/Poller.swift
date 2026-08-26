@@ -116,7 +116,20 @@ final class Poller {
             consecutiveFailures = 0
             status = .connected(Date())
 
-            let parsed = result.messages.compactMap {
+            // Control events are instructions, not entries: they are applied
+            // and never shown. Handled before parsing so an unrecognised one is
+            // dropped rather than rendered as a row with a sentinel for a title.
+            var events: [TransportMessage] = []
+            for message in result.messages {
+                guard ControlEvent.isControl(message) else {
+                    events.append(message)
+                    continue
+                }
+                if case .clearSession(let session)? = ControlEvent.parse(message) {
+                    store.markSessionRead(session)
+                }
+            }
+            let parsed = events.compactMap {
                 MessageParser.parse($0, presence: presence.seconds)
             }
             let fresh = store.add(parsed)

@@ -386,6 +386,53 @@ grep -q "/agent-inbox" "$CURL_ARGS" \
   && ok "and the message is still published" \
   || fail "and the message is still published" "args: $(tr '\n' ' ' < "$CURL_ARGS")"
 
+# --- typing in a conversation clears its row, but only if it has one ---
+#
+# The Notification hook fires on an idle timer, so a clear published on every
+# prompt would tell the inbox to retire sessions it has never heard of. The
+# marker is what makes it "clear the row you are showing" rather than noise.
+stub_curl_home
+send_for_real stop "$(printf '{"session_id":"%s","cwd":"/tmp/repo"}' "$SID")"
+: > "$CURL_ARGS"
+send_for_real prompt "$(prompt_payload 'carry on then')"
+# The id must be the truncated one the footer carries, which is all the app
+# ever stores. Sending the full id would clear nothing, silently.
+if grep -q "agent-inbox:control" "$CURL_ARGS" && grep -qx "clear ${SID:0:8}" "$CURL_ARGS"; then
+  ok "typing after a notification publishes a clear for that session"
+else
+  fail "typing after a notification publishes a clear for that session" \
+    "args: $(tr '\n' ' ' < "$CURL_ARGS")"
+fi
+
+: > "$CURL_ARGS"
+send_for_real prompt "$(prompt_payload 'and again')"
+if grep -q "agent-inbox:control" "$CURL_ARGS"; then
+  fail "a second prompt does not clear again" "args: $(tr '\n' ' ' < "$CURL_ARGS")"
+else
+  ok "a second prompt does not clear again, the row is already gone"
+fi
+
+stub_curl_home
+send_for_real prompt "$(prompt_payload 'first thing I have said')"
+if grep -q "agent-inbox:control" "$CURL_ARGS"; then
+  fail "a session that never reported publishes no clear" "args: $(tr '\n' ' ' < "$CURL_ARGS")"
+else
+  ok "a session that never reported publishes no clear"
+fi
+
+# The control event is ntfy's business. Discord is a record of what happened,
+# and "the user started typing" is not something to keep forever.
+stub_curl_home
+printf 'https://discord.example.com/webhook' > "$HOME/.agent-inbox/webhook-url"
+send_for_real stop "$(printf '{"session_id":"%s","cwd":"/tmp/repo"}' "$SID")"
+: > "$CURL_ARGS"
+send_for_real prompt "$(prompt_payload 'go on')"
+if grep -q "discord.example.com" "$CURL_ARGS"; then
+  fail "the clear is not sent to Discord" "args: $(tr '\n' ' ' < "$CURL_ARGS")"
+else
+  ok "the clear goes to ntfy only, never to Discord"
+fi
+
 rm -f "$CT" "$TR"
 
 echo
