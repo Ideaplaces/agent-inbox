@@ -80,3 +80,64 @@ final class InboxStoreTests: XCTestCase {
         XCTAssertEqual(presence.seconds, before)
     }
 }
+
+
+/// A conversation is one thing, so the inbox shows one row for it.
+///
+/// Before this, a busy session stacked a row per turn: the badge counted six
+/// where one conversation was waiting, and five of the six repeated a state the
+/// newest had already moved past.
+@MainActor
+final class SessionCollapseTests: XCTestCase {
+    private func store() -> InboxStore {
+        SenderConfig.directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString)
+        return InboxStore(presence: Presence())
+    }
+
+    private func item(_ id: String, session: String?, kind: ItemKind = .finished) -> InboxItem {
+        InboxItem(
+            id: id, kind: kind, repo: "r", host: "h", duration: nil,
+            summary: nil, ask: nil, detail: nil, waitingOn: nil,
+            sessionID: session, cwd: nil, receivedAt: Date(), presenceAtArrival: 0)
+    }
+
+    func testANewerItemRetiresTheOlderOnesFromTheSameSession() {
+        let store = self.store()
+        store.add([item("1", session: "a")])
+        store.add([item("2", session: "a")])
+        store.add([item("3", session: "a")])
+        XCTAssertEqual(store.unread.map(\.id), ["3"])
+    }
+
+    func testOtherSessionsAreUntouched() {
+        let store = self.store()
+        store.add([item("1", session: "a"), item("2", session: "b")])
+        store.add([item("3", session: "a")])
+        XCTAssertEqual(Set(store.unread.map(\.id)), ["3", "2"])
+    }
+
+    func testAStopAndAnIdleArrivingTogetherCollapseToOne() {
+        // The two hooks can be polled in the same batch, so the collapse has to
+        // work inside one add() and not only across calls.
+        let store = self.store()
+        store.add([item("1", session: "a"), item("2", session: "a", kind: .needsYou)])
+        XCTAssertEqual(store.unread.map(\.id), ["2"])
+    }
+
+    func testItemsWithNoSessionAreNeverCollapsedTogether() {
+        // No session id means nothing to group by; collapsing them would hide
+        // unrelated events behind each other.
+        let store = self.store()
+        store.add([item("1", session: nil)])
+        store.add([item("2", session: nil)])
+        XCTAssertEqual(Set(store.unread.map(\.id)), ["1", "2"])
+    }
+
+    func testTheBadgeFollowsTheCollapse() {
+        let store = self.store()
+        store.add([item("1", session: "a", kind: .needsYou)])
+        store.add([item("2", session: "a", kind: .needsYou)])
+        XCTAssertEqual(store.needsYouCount, 1)
+    }
+}

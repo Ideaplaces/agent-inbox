@@ -38,10 +38,40 @@ final class InboxStore {
         let fresh = incoming.filter { !known.contains($0.id) }
         guard !fresh.isEmpty else { return [] }
         items.append(contentsOf: fresh)
+        retireSupersededItems(by: fresh)
         // Keep the archive bounded; the transport history is the real archive.
         if items.count > 500 { items.removeFirst(items.count - 500) }
         save()
         return fresh
+    }
+
+    /// A conversation has one current state, so only its newest item is worth
+    /// showing.
+    ///
+    /// Five rows for one session are five copies of a question the newest row
+    /// already answers, and they inflate the badge into a number that means
+    /// nothing. Anything older from the same session is therefore retired the
+    /// moment a newer item lands, including an older item inside the same
+    /// batch: a turn that ends and then goes idle delivers two at once.
+    ///
+    /// Keyed on the session, not the repo. Two sessions in the same repo are
+    /// two conversations and each keeps its own row. Items with no session id
+    /// are left alone, since there is nothing to group them by.
+    private func retireSupersededItems(by fresh: [InboxItem]) {
+        let touched = Set(fresh.compactMap(\.sessionID))
+        guard !touched.isEmpty else { return }
+        var newestIndexPerSession: [String: Int] = [:]
+        for (index, item) in items.enumerated() {
+            guard let session = item.sessionID, touched.contains(session) else { continue }
+            newestIndexPerSession[session] = index
+        }
+        let survivors = Set(newestIndexPerSession.values)
+        for index in items.indices
+        where !items[index].isRead
+            && !survivors.contains(index)
+            && items[index].sessionID.map(touched.contains) == true {
+            items[index].isRead = true
+        }
     }
 
     func markRead(_ id: String) {
