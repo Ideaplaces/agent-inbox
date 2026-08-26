@@ -127,6 +127,26 @@ _user_text() {
     | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | head -c 150
 }
 
+# Did the agent stop by asking something?
+#
+# The Notification hook fires for two unrelated things and the payload does not
+# tell them apart: a permission request, which really is blocked on you, and a
+# plain idle timer that trips 60 seconds after a turn ends whether or not
+# anything was asked. Every needsYou item on this machine was the second kind,
+# arriving 60s after the stop event and repeating it under a hand.
+#
+# For the idle case the only honest signal is the agent's own last line. Read
+# it untruncated, since the 400-char body cut would hide the question mark.
+agent_asked_a_question() {
+  local last
+  last="$(last_assistant_text 8000 \
+    | sed 's/[[:space:]]*$//' | grep -v '^[[:space:]]*$' | tail -1)"
+  case "$last" in
+    *\?) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # What this chat means, as up to two lines:
 #   🧵 what this session is about
 #   🗣 the most recent real user message (what you asked for right now)
@@ -199,6 +219,14 @@ $SNIPPET"
 
   notification)
     MESSAGE="$(printf '%s' "$INPUT" | jq -r '.message // "Waiting for input"')"
+    # The hand has to mean "this one is blocked on you", or it means nothing.
+    # Gate only the idle message: anything else this hook reports, a permission
+    # request above all, is a real block and keeps the hand.
+    case "$MESSAGE" in
+      *"waiting for your input"*|*"Waiting for input"*)
+        agent_asked_a_question || exit 0
+        ;;
+    esac
     TITLE="🖐️ $REPO @ $HOST_LABEL"
     COLOR=16705372
     # Lead with what the chat is about, then what Claude is waiting on.
