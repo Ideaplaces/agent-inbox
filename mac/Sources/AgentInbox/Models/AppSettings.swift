@@ -107,7 +107,7 @@ final class AppSettings {
 
     private init() {
         defaults.register(defaults: [
-            "ntfyServer": "https://ntfy.sh",
+            "ntfyServer": AppSettings.publicNtfyServer,
             "pollSeconds": 15,
             "expireMinutes": 5,
             "idleThreshold": 90,
@@ -121,7 +121,7 @@ final class AppSettings {
         // ntfy is the default because it needs no account, no bot, and no
         // channel to provision: the topic name is the whole channel. Discord
         // is the deliberate choice you make when you want a durable archive.
-        ntfyServer = defaults.string(forKey: "ntfyServer") ?? "https://ntfy.sh"
+        ntfyServer = defaults.string(forKey: "ntfyServer") ?? Self.publicNtfyServer
         ntfyTopic = defaults.string(forKey: "ntfyTopic") ?? ""
         discordChannelID = defaults.string(forKey: "discordChannelID") ?? ""
         discordGuildID = defaults.string(forKey: "discordGuildID") ?? ""
@@ -163,6 +163,15 @@ final class AppSettings {
 
     /// The topic is the only secret protecting message bodies, so it has to be
     /// long enough that guessing it is not a threat model.
+    /// The free public ntfy, and the reason this installs without an account.
+    ///
+    /// Spelled once because three separate things key off it: the default a
+    /// fresh install lands on, the placeholder in setup, and whether the token
+    /// field is shown at all. When they were three string literals, changing
+    /// the default would have left the token field hidden on a server that
+    /// needs one, and the failure is a silent 403 with an empty inbox.
+    nonisolated static let publicNtfyServer = "https://ntfy.sh"
+
     nonisolated static func randomNtfyTopic() -> String {
         let user = NSUserName().lowercased().filter { $0.isLetter || $0.isNumber }
         var bytes = [UInt8](repeating: 0, count: 12)
