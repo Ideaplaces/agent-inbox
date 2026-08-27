@@ -5,7 +5,7 @@ import Foundation
 struct SenderSnapshot {
     var transport: TransportKind
     var ntfyTopic: String = ""
-    var ntfyServer: String = "https://ntfy.sh"
+    var ntfyServer: String = AppSettings.publicNtfyServer
     var ntfyToken: String = ""
     var discordWebhookURL: String = ""
     var discordChannelID: String = ""
@@ -125,7 +125,7 @@ enum SenderConfig {
             "MUTE_TAG=\"\(settings.muteTag)\"",
             "HOST_LABEL=\"\(settings.hostLabel)\"",
         ]
-        if settings.transport == .ntfy, settings.ntfyServer != "https://ntfy.sh" {
+        if settings.transport == .ntfy, settings.ntfyServer != AppSettings.publicNtfyServer {
             lines.append("NTFY_SERVER=\"\(settings.ntfyServer)\"")
         }
         write(lines.joined(separator: "\n") + "\n", to: "config", mode: 0o644)

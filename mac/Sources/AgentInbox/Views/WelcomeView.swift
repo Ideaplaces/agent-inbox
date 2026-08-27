@@ -182,7 +182,7 @@ struct TransportPicker: View {
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
                     LabeledContent("Server") {
-                        TextField("https://ntfy.sh", text: $settings.ntfyServer)
+                        TextField(AppSettings.publicNtfyServer, text: $settings.ntfyServer)
                             .textFieldStyle(.roundedBorder)
                             .font(.system(size: 11))
                     }
@@ -190,7 +190,7 @@ struct TransportPicker: View {
                     // Only meaningful on a self-hosted server. ntfy.sh has no
                     // accounts, so showing this against the default would
                     // invite people to fill in a field that does nothing.
-                    if settings.ntfyServer != "https://ntfy.sh" {
+                    if settings.ntfyServer != AppSettings.publicNtfyServer {
                         LabeledContent("Token") {
                             SecureField("optional", text: $settings.ntfyToken)
                                 .textFieldStyle(.roundedBorder)
