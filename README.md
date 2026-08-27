@@ -6,10 +6,14 @@ If you run several Claude Code sessions in parallel, some local and some over SS
 box, the bottleneck isn't the agents. It's remembering who finished what, and who is sitting
 blocked on a permission prompt. Agent Inbox turns that around: sessions interrupt *you*.
 
-- 🖐️ **Needs you.** An agent hit a permission prompt or is waiting for input.
+- 🖐️ **Needs you.** An agent hit a permission prompt, or ended its turn on a question.
 - ✅ **Finished.** A turn completed, with how long it took and the agent's closing words.
 - 🧵 **Context on every message.** What the conversation is about and what you last asked,
   so a ping from a two-day-old session still rings the right bell.
+- **One row per conversation.** A newer message retires the older ones from the same
+  session, so the list says where each conversation is rather than every step it took.
+- **Typing clears it.** Start writing in a conversation and its row goes on its own. You
+  are already there; it has nothing left to tell you.
 - **A sticky menubar inbox.** A `🖐️2 ✅3` badge that stays until you mark it read. Go for
   coffee, come back, see who's waiting.
 
@@ -98,8 +102,15 @@ so the topic is effectively the password, which is why the app generates a long 
 rather than letting you invent a short one. Keep it private.
 
 What ntfy does not give you is history. The public server caches messages for about 12
-hours, so the menubar inbox is your record, not the feed. You can
-[self-host ntfy](https://docs.ntfy.sh/install/) and set `NTFY_SERVER` to change that.
+hours, so the menubar inbox is your record, not the feed.
+
+[Self-hosting ntfy](https://docs.ntfy.sh/install/) changes both of those. Set `NTFY_SERVER`
+to your instance, keep as much history as you want, and if it runs `auth-default-access:
+deny-all`, set a token so the topic name is no longer the only thing protecting your
+messages. The app takes one in **Settings**, or with
+`--configure --transport ntfy --topic <t> --server <url> --token <tk>`. It is stored in the
+Keychain and mirrored to `~/.agent-inbox/ntfy-token` for the bash senders. Leave it empty
+for ntfy.sh, which has no accounts.
 
 Choose **Discord** when you want a durable, browsable archive of every session, plus phone
 push through an app you probably already run. It costs a bot and a private channel to set
@@ -121,7 +132,7 @@ Three hooks produce these:
 |------------|---------|--------------|
 | `UserPromptSubmit` | You handed work to the agent | Nothing. It just records a start time |
 | `Stop` | The agent finished its turn | **✅** with the duration and its closing words. Turns shorter than `MIN_SECONDS` (45s by default) are dropped, so quick back-and-forth doesn't spam you |
-| `Notification` | The agent needs permission, or is idle waiting | **🖐️** with the reason and what it just asked |
+| `Notification` | The agent needs permission, or has gone idle | **🖐️** with the reason and what it just asked. A permission prompt always reports. The idle timer fires 60s after *every* turn, so it only reports when the agent's closing line was a question; otherwise the ✅ already said it |
 
 **Clicking an item clears it.** There is deliberately no jump-to-session: a notification
 carries only the first eight characters of the session id, and `claude --resume` needs the
@@ -182,7 +193,8 @@ Notification bodies include snippets of your prompts and Claude's replies, plus 
 and working directory paths. So:
 
 - **ntfy:** treat the generated topic like a password. Anyone who has it can read your
-  messages. Self-host if that isn't good enough.
+  messages. Self-host if that isn't good enough, and add a token so the topic name grants
+  nothing on its own.
 - **Discord:** use a private channel, not one other people are in.
 - Either way, think twice if you work on sensitive codebases.
 
@@ -236,6 +248,11 @@ MUTE_TAG="#mute, stop notifying"           # tags that silence one
 HOST_LABEL="mac"                # machine name shown in messages
 NTFY_SERVER="https://ntfy.sh"   # a self-hosted ntfy instance
 ```
+
+The ntfy token is deliberately not in here. `config` is written world-readable so a sender
+running as another user can read it, so the token lives in `~/.agent-inbox/ntfy-token` at
+`0600` instead. Switching transport removes the files belonging to the one you left, because
+`notify.sh` posts to whatever it finds: a leftover config is not inert, it keeps sending.
 
 These are sender-side only, and the app writes them itself so the two can never disagree.
 Poll interval, sound, expiry and idle threshold are app-side and live in Settings.
@@ -299,8 +316,7 @@ never end up with two copies of every event.
 
 ## Roadmap
 
-Collapsing, so a ✅ retires an earlier 🖐️ from the same session. Cloud and remote agents in
-the same inbox.
+Cloud and remote agents in the same inbox.
 
 ## License
 

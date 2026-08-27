@@ -162,9 +162,33 @@ Copying a local build over `/Applications` replaces the released one, so brew's
 recorded version will disagree with what is installed until the next upgrade.
 Harmless, but it explains the mismatch.
 
+## Keep README.md current
+
+**Anything a user would want to know goes into `README.md` in the same change that
+introduces it.** Not afterwards, not in a follow-up pass: the README is the only
+description of this thing most people will ever read, and a feature nobody knows
+about was not worth building.
+
+That means a new behaviour, a changed one, a new setting or config file, a new
+transport, a new flag, a changed default, or a rule that decides whether a
+notification fires at all. It does not mean refactors, internal fixes, or
+anything invisible from outside.
+
+Two failure modes to watch for, both of which had happened by the time this was
+written:
+
+- **The Roadmap section describing something already shipped.** Collapsing rows
+  sat there while the feature was live.
+- **A behaviour table that is now a lie.** The hook table said the idle timer
+  produces a 🖐️, months after it stopped doing so unconditionally.
+
+When a change alters what a notification means, the tables in "What a
+notification looks like" are the first thing to reread, not the last.
+
 ## Conventions
 
 - Feature branches off `main`, PRs into `main`. This repo has no `develop`.
+- Every user-visible change updates `README.md` in the same PR. See above.
 - No AI attribution in commits.
 - The senders must stay POSIX-ish bash: they run on Linux dev boxes, not only macOS.
 - `notify.sh` must never block or fail a Claude Code session. Every exit path is
