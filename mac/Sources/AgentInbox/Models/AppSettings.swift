@@ -8,7 +8,6 @@ import AppKit
 enum TransportKind: String, CaseIterable, Identifiable {
     case none
     case ntfy
-    case discord
 
     var id: String { rawValue }
 
@@ -16,7 +15,6 @@ enum TransportKind: String, CaseIterable, Identifiable {
         switch self {
         case .none: return "Not configured"
         case .ntfy: return "ntfy"
-        case .discord: return "Discord"
         }
     }
 }
@@ -45,15 +43,6 @@ final class AppSettings {
     var ntfyTopic: String {
         didSet { defaults.set(ntfyTopic, forKey: "ntfyTopic"); sync() }
     }
-    var discordChannelID: String {
-        didSet { defaults.set(discordChannelID, forKey: "discordChannelID"); sync() }
-    }
-    var discordGuildID: String {
-        didSet { defaults.set(discordGuildID, forKey: "discordGuildID"); sync() }
-    }
-    var discordBotToken: String {
-        didSet { Keychain.set(discordBotToken, for: "discord-bot-token") }
-    }
     /// Bearer token for a self-hosted ntfy. Empty for ntfy.sh, which has no
     /// accounts. In the Keychain rather than UserDefaults because it is a
     /// credential, and mirrored to the sender's own file by `sync()`.
@@ -61,9 +50,6 @@ final class AppSettings {
         didSet { Keychain.set(ntfyToken, for: "ntfy-token"); sync() }
     }
 
-    var discordWebhookURL: String {
-        didSet { Keychain.set(discordWebhookURL, for: "discord-webhook-url"); sync() }
-    }
 
     var pollSeconds: Int {
         didSet { defaults.set(pollSeconds, forKey: "pollSeconds") }
@@ -123,11 +109,7 @@ final class AppSettings {
         // is the deliberate choice you make when you want a durable archive.
         ntfyServer = defaults.string(forKey: "ntfyServer") ?? Self.publicNtfyServer
         ntfyTopic = defaults.string(forKey: "ntfyTopic") ?? ""
-        discordChannelID = defaults.string(forKey: "discordChannelID") ?? ""
-        discordGuildID = defaults.string(forKey: "discordGuildID") ?? ""
         ntfyToken = Keychain.get("ntfy-token") ?? ""
-        discordBotToken = Keychain.get("discord-bot-token") ?? ""
-        discordWebhookURL = Keychain.get("discord-webhook-url") ?? ""
         pollSeconds = defaults.integer(forKey: "pollSeconds")
         expireMinutes = defaults.integer(forKey: "expireMinutes")
         idleThreshold = defaults.integer(forKey: "idleThreshold")
@@ -184,7 +166,6 @@ final class AppSettings {
         switch transport {
         case .none: return false
         case .ntfy: return !ntfyTopic.isEmpty
-        case .discord: return !discordBotToken.isEmpty && !discordChannelID.isEmpty
         }
     }
 
@@ -195,11 +176,6 @@ final class AppSettings {
             return nil
         case .ntfy:
             return URL(string: "\(ntfyServer)/\(ntfyTopic)")
-        case .discord:
-            if !discordGuildID.isEmpty {
-                return URL(string: "discord://-/channels/\(discordGuildID)/\(discordChannelID)")
-            }
-            return URL(string: "https://discord.com/channels/@me/\(discordChannelID)")
         }
     }
 
@@ -217,9 +193,6 @@ final class AppSettings {
             ntfyTopic: ntfyTopic,
             ntfyServer: ntfyServer,
             ntfyToken: ntfyToken,
-            discordWebhookURL: discordWebhookURL,
-            discordChannelID: discordChannelID,
-            discordGuildID: discordGuildID,
             minSeconds: minSeconds,
             hostLabel: hostLabel,
             watchMode: watchMode,
@@ -235,10 +208,6 @@ final class AppSettings {
     func adoptExistingShellInstall() {
         guard transport == .none else { return }
 
-        let token = SenderConfig.readFile("bot-token")
-        let channel = SenderConfig.readFile("channel-id")
-        let guild = SenderConfig.readFile("guild-id")
-        let webhook = SenderConfig.readFile("webhook-url")
         let topic = SenderConfig.readFile("ntfy-topic")
         let shellConfig = SenderConfig.readShellConfig()
 
@@ -264,13 +233,11 @@ final class AppSettings {
             }
         }
 
-        if let token, let channel, !token.isEmpty, !channel.isEmpty {
-            discordBotToken = token
-            discordChannelID = channel
-            discordGuildID = guild ?? ""
-            discordWebhookURL = webhook ?? ""
-            transport = .discord
-        } else if let topic, !topic.isEmpty {
+        // A machine that used to send to Discord adopts as unconfigured rather
+        // than half-configured, and setup generates it a topic. Its old files
+        // are cleared by the writer, so it stops publishing to a channel this
+        // app can no longer read.
+        if let topic, !topic.isEmpty {
             ntfyTopic = topic
             transport = .ntfy
         }

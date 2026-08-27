@@ -82,7 +82,7 @@ Sources/AgentInbox/
 ├── Store/
 │   ├── InboxStore.swift       items, read state, presence-based expiry
 │   └── Keychain.swift
-├── Transport/                 ntfy and Discord, both stateless
+├── Transport/                 ntfy, stateless
 ├── Services/
 │   ├── Poller.swift           the loop, cursors, connection status
 │   ├── Presence.swift         time actually spent at the keyboard

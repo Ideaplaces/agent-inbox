@@ -207,10 +207,16 @@ final class TransportFileRetirementTests: XCTestCase {
         FileManager.default.fileExists(atPath: dir.appendingPathComponent(name).path)
     }
 
-    func testMovingToNtfyStopsTheSenderPublishingToDiscord() {
-        SenderConfig.write(
-            SenderSnapshot(transport: .discord, discordWebhookURL: "https://discord/x",
-                           discordChannelID: "123", discordGuildID: "456"))
+    func testAnInstallThatUsedDiscordStopsPublishingToIt() throws {
+        // The Discord transport is gone, but a machine that used it still has
+        // its files on disk, and notify.sh posts to whatever it finds. Removing
+        // the transport without clearing them would leave the app quiet about
+        // Discord while every session kept sending there.
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        for name in ["webhook-url", "channel-id", "guild-id"] {
+            try "leftover".write(
+                to: dir.appendingPathComponent(name), atomically: true, encoding: .utf8)
+        }
         XCTAssertTrue(exists("webhook-url"))
 
         SenderConfig.write(SenderSnapshot(transport: .ntfy, ntfyTopic: "t", ntfyToken: "tk"))
@@ -219,16 +225,6 @@ final class TransportFileRetirementTests: XCTestCase {
         XCTAssertFalse(exists("guild-id"))
         XCTAssertTrue(exists("ntfy-topic"))
         XCTAssertTrue(exists("ntfy-token"))
-    }
-
-    func testMovingToDiscordStopsTheSenderPublishingToNtfy() {
-        SenderConfig.write(SenderSnapshot(transport: .ntfy, ntfyTopic: "t", ntfyToken: "tk"))
-        SenderConfig.write(
-            SenderSnapshot(transport: .discord, discordWebhookURL: "https://discord/x",
-                           discordChannelID: "123"))
-        XCTAssertFalse(exists("ntfy-topic"))
-        XCTAssertFalse(exists("ntfy-token"), "a credential outliving its transport")
-        XCTAssertTrue(exists("webhook-url"))
     }
 
     func testChoosingNoTransportLeavesNothingBehindToSendWith() {

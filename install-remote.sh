@@ -4,7 +4,6 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/Ideaplaces/agent-inbox/main/install-remote.sh \
 #     | bash -s -- --ntfy <topic>
-#   curl -fsSL .../install-remote.sh | bash -s -- --discord-webhook '<url>'
 #
 # Optional:
 #   --host-label <name>   how this machine is named in messages. Defaults to
@@ -22,14 +21,13 @@ TRANSPORT=""
 VALUE=""
 
 usage() {
-  echo "usage: install-remote.sh --ntfy <topic> | --discord-webhook <url> [--host-label <name>]" >&2
+  echo "usage: install-remote.sh --ntfy <topic> [--host-label <name>]" >&2
   exit 1
 }
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --ntfy)             TRANSPORT=ntfy;    VALUE="${2:-}"; shift 2 || usage ;;
-    --discord-webhook)  TRANSPORT=discord; VALUE="${2:-}"; shift 2 || usage ;;
     --host-label)       HOST_LABEL="${2:-}"; shift 2 || usage ;;
     *) usage ;;
   esac
@@ -50,11 +48,6 @@ case "$TRANSPORT" in
     printf '%s' "$VALUE" > "$CONF_DIR/ntfy-topic"
     chmod 600 "$CONF_DIR/ntfy-topic"
     echo "==> ntfy transport configured"
-    ;;
-  discord)
-    printf '%s' "$VALUE" > "$CONF_DIR/webhook-url"
-    chmod 600 "$CONF_DIR/webhook-url"
-    echo "==> Discord transport configured"
     ;;
 esac
 

@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
-# agent-inbox sender: Claude Code hook -> ntfy topic and/or Discord channel.
+# agent-inbox sender: Claude Code hook -> an ntfy topic.
 #
 # Called by Claude Code hooks with the event kind as $1 (prompt|stop|notification).
 # Reads the hook JSON payload on stdin. Never blocks or fails the session:
 # every exit path is 0 and each post has a short timeout.
 #
-# Whichever transports are configured under ~/.agent-inbox/ receive the event;
-# having both is fine. Install with ./install.sh --ntfy <topic> or
-# ./install.sh --discord-webhook <url>, which also writes the hooks into
+# Install with ./install.sh --ntfy <topic>, which also writes the hooks into
 # ~/.claude/settings.json.
 #
 # HOST_LABEL (see ~/.agent-inbox/config) is the machine name shown in every
@@ -169,9 +167,7 @@ agent_asked_a_question() {
 #
 # Control events ride the same topic as everything else and are told apart by an
 # exact title: a real event's title always carries a repo and an @host, so the
-# two can never be confused. ntfy only, deliberately. Discord is a record of
-# what happened, and "the user started typing" is not an event worth a permanent
-# row in it.
+# two can never be confused.
 send_control() { # $1 = the instruction
   _load_ntfy_config
   [ -n "${NTFY_TOPIC:-}" ] || return 0
@@ -261,7 +257,6 @@ $SNIPPET"
     else
       TITLE="✅ $REPO @ $HOST_LABEL ($DURATION)"
     fi
-    COLOR=5763719
     BODY="$SNIPPET"
     FOOTER="session ${SESSION_ID:0:8} · $CWD"
     ;;
@@ -277,7 +272,6 @@ $SNIPPET"
         ;;
     esac
     TITLE="🖐️ $REPO @ $HOST_LABEL"
-    COLOR=16705372
     # Lead with what the chat is about, then what Claude is waiting on.
     CONTEXT="$(session_context)"
     LAST="$(last_assistant_text 400)"
@@ -307,19 +301,7 @@ if [ -n "${AGENT_INBOX_DRY_RUN:-}" ]; then
   exit 0
 fi
 
-# --- Transports: whichever is configured gets the event (both is fine) ---
-
-# Discord (webhook): rich embed, channel history doubles as a browsable inbox.
-if [ -s "$CONF_DIR/webhook-url" ]; then
-  WEBHOOK="$(cat "$CONF_DIR/webhook-url")"
-  PAYLOAD="$(jq -n \
-    --arg title "$TITLE" \
-    --arg body "$BODY" \
-    --arg footer "$FOOTER" \
-    --argjson color "$COLOR" \
-    '{embeds: [{title: $title, description: $body, color: $color, footer: {text: $footer}}]}')"
-  curl -m 5 -s -o /dev/null -H "Content-Type: application/json" -d "$PAYLOAD" "$WEBHOOK" || true
-fi
+# --- Transport ---
 
 # ntfy (https://ntfy.sh): zero-setup pub/sub — the topic name IS the channel.
 # Configure via NTFY_TOPIC in ~/.agent-inbox/config or ~/.agent-inbox/ntfy-topic.

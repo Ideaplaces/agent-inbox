@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# agent-inbox Mac watcher: polls the configured transport (ntfy topic or
-# Discord channel) and surfaces every new message on the Mac:
+# agent-inbox Mac watcher: polls the ntfy topic and surfaces every new message
+# on the Mac:
 #   - native macOS notification (click opens the transport's history)
 #   - appends to ~/.agent-inbox/unread.log, the sticky inbox rendered in the
 #     menubar by swiftbar-plugin/agent-inbox.5s.sh until marked read
@@ -8,10 +8,6 @@
 # Runs as a launchd agent (see install-mac-watcher.sh). Reads:
 #   ~/.agent-inbox/ntfy-topic   (ntfy transport, cached by install-mac-watcher.sh)
 #   ~/.agent-inbox/ntfy-cursor  (ntfy cursor, managed here)
-#   ~/.agent-inbox/bot-token    (Discord transport, cached by install-mac-watcher.sh)
-#   ~/.agent-inbox/channel-id   (Discord transport, cached by install-mac-watcher.sh)
-#   ~/.agent-inbox/guild-id     (Discord, optional: enables the desktop deep link)
-#   ~/.agent-inbox/last-id      (Discord cursor, managed here)
 #   ~/.agent-inbox/presence     (seconds spent at the keyboard, managed here)
 #   ~/.agent-inbox/config       (optional: POLL_SECONDS, NOTIFY_SOUND,
 #                                EXPIRE_MINUTES, IDLE_THRESHOLD, NTFY_SERVER)
@@ -23,30 +19,17 @@ EXPIRE_MINUTES=5    # drop inbox items after this much time AT THE KEYBOARD (0 =
 IDLE_THRESHOLD=90   # seconds without input before we consider you away
 [ -f "$CONF_DIR/config" ] && . "$CONF_DIR/config"
 
-GUILD="$(cat "$CONF_DIR/guild-id" 2>/dev/null || true)"
 TN=/opt/homebrew/bin/terminal-notifier
-TOKEN="$(cat "$CONF_DIR/bot-token" 2>/dev/null)"
-CHANNEL="$(cat "$CONF_DIR/channel-id" 2>/dev/null)"
 NTFY_SERVER="${NTFY_SERVER:-https://ntfy.sh}"
 if [ -z "${NTFY_TOPIC:-}" ] && [ -s "$CONF_DIR/ntfy-topic" ]; then
   NTFY_TOPIC="$(cat "$CONF_DIR/ntfy-topic")"
 fi
 
-if [ -n "$TOKEN" ] && [ -n "$CHANNEL" ]; then
-  MODE=discord
-  # Deep link needs the guild; without it fall back to the web client.
-  if [ -n "$GUILD" ]; then
-    OPEN_URL="discord://-/channels/$GUILD/$CHANNEL"
-  else
-    OPEN_URL="https://discord.com/channels/@me/$CHANNEL"
-  fi
-elif [ -n "${NTFY_TOPIC:-}" ]; then
-  MODE=ntfy
+if [ -n "${NTFY_TOPIC:-}" ]; then
   OPEN_URL="$NTFY_SERVER/$NTFY_TOPIC"
 else
-  echo "watcher not configured. Run one of:" >&2
+  echo "watcher not configured. Run:" >&2
   echo "  ./install-mac-watcher.sh --ntfy <topic>" >&2
-  echo "  ./install-mac-watcher.sh --discord <bot-token> <channel-id> [guild-id]" >&2
   exit 1
 fi
 
@@ -55,7 +38,7 @@ notify() { # $1 title, $2 body
   title="$(printf '%s' "$1" | tr -d '"\\' | head -c 120)"
   body="$(printf '%s' "$2" | tr '\n' ' ' | tr -d '"\\' | head -c 240)"
   if [ -x "$TN" ]; then
-    # Click jumps to the transport's history (Discord app or ntfy web).
+    # Click jumps to the ntfy web history.
     # Omitting -sound keeps it silent; NOTIFY_SOUND opts back in.
     if [ -n "$NOTIFY_SOUND" ]; then
       "$TN" -title "$title" -message "${body:-...}" -sound "$NOTIFY_SOUND" \
@@ -109,70 +92,34 @@ inbox_expire() {
     && mv "$tmp" "$CONF_DIR/unread.log" || rm -f "$tmp"
 }
 
-fetch() { # $1 query string
-  curl -m 10 -s -H "Authorization: Bot $TOKEN" \
-    "https://discord.com/api/v10/channels/$CHANNEL/messages?$1"
-}
-
 # Titles read "<emoji> <repo> @ <host>[ (duration)]"; footers end with the cwd
 # after " · ". Both let the menubar open the session in VS Code.
 host_of()   { printf '%s' "$1" | sed -n 's/.* @ \([^ (]*\).*/\1/p'; }
 cwd_of()    { printf '%s' "$1" | sed -n 's/.*· \(\/.*\)$/\1/p'; }
 
-if [ "$MODE" = "discord" ]; then
-  # First run: set the cursor to the newest message without replaying history.
-  if [ ! -f "$CONF_DIR/last-id" ]; then
-    fetch "limit=1" | jq -r '.[0].id // empty' > "$CONF_DIR/last-id"
-    echo "watcher started (discord), cursor initialized"
-  fi
-  while true; do
-    LAST="$(cat "$CONF_DIR/last-id" 2>/dev/null)"
-    if [ -z "$LAST" ]; then
-      fetch "limit=1" | jq -r '.[0].id // empty' > "$CONF_DIR/last-id"
-    else
-      BATCH="$(fetch "after=$LAST&limit=20")"
-      if printf '%s' "$BATCH" | jq -e 'type=="array" and length > 0' >/dev/null 2>&1; then
-        # API returns newest first; deliver oldest first.
-        printf '%s' "$BATCH" | jq -c 'reverse | .[]' | while IFS= read -r MSG; do
-          TITLE="$(printf '%s' "$MSG" | jq -r '.embeds[0].title // .content // "Agent Inbox"')"
-          # Description only — session id and path stay in the Discord history.
-          BODY="$(printf '%s' "$MSG" | jq -r '.embeds[0].description // ""')"
-          FOOT="$(printf '%s' "$MSG" | jq -r '.embeds[0].footer.text // ""')"
-          notify "$TITLE" "$BODY"
-          inbox_append "$TITLE" "$BODY" "$(host_of "$TITLE")" "$(cwd_of "$FOOT")"
-        done
-        printf '%s' "$BATCH" | jq -r '.[0].id' > "$CONF_DIR/last-id"
-      fi
-    fi
-    presence_tick
-    inbox_expire
-    sleep "$POLL_SECONDS"
-  done
-else
-  # ntfy mode: poll the topic's JSON feed with a since-cursor (epoch first run,
-  # then last message id so nothing is replayed or missed).
-  CURSOR_FILE="$CONF_DIR/ntfy-cursor"
-  if [ ! -s "$CURSOR_FILE" ]; then
-    date +%s > "$CURSOR_FILE"
-    echo "watcher started (ntfy), cursor initialized"
-  fi
-  while true; do
-    SINCE="$(cat "$CURSOR_FILE")"
-    BATCH="$(curl -m 15 -s "$NTFY_SERVER/$NTFY_TOPIC/json?poll=1&since=$SINCE" \
-      | jq -cs '[.[] | select(.event=="message")]' 2>/dev/null)"
-    if printf '%s' "$BATCH" | jq -e 'type=="array" and length > 0' >/dev/null 2>&1; then
-      printf '%s' "$BATCH" | jq -c '.[]' | while IFS= read -r MSG; do
-        TITLE="$(printf '%s' "$MSG" | jq -r '.title // "Agent Inbox"')"
-        # First body line only — the footer line stays in the ntfy history.
-        BODY="$(printf '%s' "$MSG" | jq -r '.message // "" | split("\n") | .[0]')"
-        FOOT="$(printf '%s' "$MSG" | jq -r '.message // "" | split("\n") | last')"
-        notify "$TITLE" "$BODY"
-        inbox_append "$TITLE" "$BODY" "$(host_of "$TITLE")" "$(cwd_of "$FOOT")"
-      done
-      printf '%s' "$BATCH" | jq -r 'last.id' > "$CURSOR_FILE"
-    fi
-    presence_tick
-    inbox_expire
-    sleep "$POLL_SECONDS"
-  done
+# ntfy mode: poll the topic's JSON feed with a since-cursor (epoch first run,
+# then last message id so nothing is replayed or missed).
+CURSOR_FILE="$CONF_DIR/ntfy-cursor"
+if [ ! -s "$CURSOR_FILE" ]; then
+  date +%s > "$CURSOR_FILE"
+  echo "watcher started (ntfy), cursor initialized"
 fi
+while true; do
+  SINCE="$(cat "$CURSOR_FILE")"
+  BATCH="$(curl -m 15 -s "$NTFY_SERVER/$NTFY_TOPIC/json?poll=1&since=$SINCE" \
+    | jq -cs '[.[] | select(.event=="message")]' 2>/dev/null)"
+  if printf '%s' "$BATCH" | jq -e 'type=="array" and length > 0' >/dev/null 2>&1; then
+    printf '%s' "$BATCH" | jq -c '.[]' | while IFS= read -r MSG; do
+      TITLE="$(printf '%s' "$MSG" | jq -r '.title // "Agent Inbox"')"
+      # First body line only — the footer line stays in the ntfy history.
+      BODY="$(printf '%s' "$MSG" | jq -r '.message // "" | split("\n") | .[0]')"
+      FOOT="$(printf '%s' "$MSG" | jq -r '.message // "" | split("\n") | last')"
+      notify "$TITLE" "$BODY"
+      inbox_append "$TITLE" "$BODY" "$(host_of "$TITLE")" "$(cwd_of "$FOOT")"
+    done
+    printf '%s' "$BATCH" | jq -r 'last.id' > "$CURSOR_FILE"
+  fi
+  presence_tick
+  inbox_expire
+  sleep "$POLL_SECONDS"
+done

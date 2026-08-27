@@ -3,7 +3,6 @@
 # notifications.
 #
 #   ./install-mac-watcher.sh --ntfy <topic>
-#   ./install-mac-watcher.sh --discord <bot-token> <channel-id> [guild-id]
 #   ./install-mac-watcher.sh --keyvault <name> [bot-token-secret]
 #
 # 1. Configures the watcher's transport under ~/.agent-inbox/
@@ -29,7 +28,7 @@ mkdir -p "$CONF_DIR" "$HOME/Library/LaunchAgents"
 [ -f "$CONF_DIR/config" ] && . "$CONF_DIR/config"
 
 usage() {
-  echo "usage: install-mac-watcher.sh --ntfy <topic> | --discord <bot-token> <channel-id> [guild-id] | --keyvault <name> [bot-token-secret]" >&2
+  echo "usage: install-mac-watcher.sh --ntfy <topic>" >&2
   exit 1
 }
 
@@ -39,31 +38,6 @@ case "${1:-}" in
     printf '%s' "$TOPIC" > "$CONF_DIR/ntfy-topic"
     chmod 600 "$CONF_DIR/ntfy-topic"
     echo "ntfy transport configured (topic: $TOPIC)"
-    ;;
-  --discord)
-    BOT_TOKEN="${2:-}"; CHANNEL_ID="${3:-}"
-    [ -n "$BOT_TOKEN" ] && [ -n "$CHANNEL_ID" ] || usage
-    printf '%s' "$BOT_TOKEN" > "$CONF_DIR/bot-token"; chmod 600 "$CONF_DIR/bot-token"
-    printf '%s' "$CHANNEL_ID" > "$CONF_DIR/channel-id"
-    [ -n "${4:-}" ] && printf '%s' "$4" > "$CONF_DIR/guild-id"
-    echo "Discord transport configured (channel: $CHANNEL_ID)"
-    ;;
-  --keyvault)
-    NAME="${2:-}"; [ -n "$NAME" ] || usage
-    BOT_SECRET="${3:-discord-bot-token-$NAME}"
-    VAULT="${AGENT_INBOX_VAULT:-}"; GUILD="${AGENT_INBOX_GUILD:-}"
-    [ -n "$VAULT" ] && [ -n "$GUILD" ] || { echo "set AGENT_INBOX_VAULT and AGENT_INBOX_GUILD"; exit 1; }
-    command -v az >/dev/null || { echo "az is required for --keyvault"; exit 1; }
-    echo "Fetching bot token ($VAULT/$BOT_SECRET)..."
-    az keyvault secret show --vault-name "$VAULT" --name "$BOT_SECRET" --query value -o tsv > "$CONF_DIR/bot-token"
-    chmod 600 "$CONF_DIR/bot-token"
-    echo "Resolving channel #agent-inbox-$NAME..."
-    CHANNEL_ID=$(curl -s -H "Authorization: Bot $(cat "$CONF_DIR/bot-token")" \
-      "https://discord.com/api/v10/guilds/$GUILD/channels" \
-      | jq -r --arg n "agent-inbox-$NAME" '.[] | select(.name==$n) | .id')
-    [ -n "$CHANNEL_ID" ] || { echo "channel agent-inbox-$NAME not found — run setup-user.sh first"; exit 1; }
-    printf '%s' "$CHANNEL_ID" > "$CONF_DIR/channel-id"
-    printf '%s' "$GUILD" > "$CONF_DIR/guild-id"
     ;;
   *)
     usage

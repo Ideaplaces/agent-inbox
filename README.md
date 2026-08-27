@@ -20,16 +20,19 @@ blocked on a permission prompt. Agent Inbox turns that around: sessions interrup
 A native menubar app on the Mac, plain bash on every machine that sends. No server to run
 and no account required.
 
+![The Agent Inbox menu, showing one finished session and one waiting on you](docs/menubar-inbox.png)
+
 ```
-senders (Claude Code hooks)         transport              surface (your Mac)
-───────────────────────────   ────────────────────   ─────────────────────────
-laptop sessions   ─ notify.sh ─┐   ntfy.sh topic    ┌─ native notifications
-dev-box sessions  ─ notify.sh ─┼─→      or         ─┤
-any other machine ─ notify.sh ─┘   Discord channel  └─ menubar inbox
+senders (Claude Code hooks)        transport            surface (your Mac)
+───────────────────────────   ──────────────────   ─────────────────────────
+laptop sessions   ─ notify.sh ─┐                   ┌─ native notifications
+dev-box sessions  ─ notify.sh ─┼─→   ntfy topic   ─┤
+any other machine ─ notify.sh ─┘                   └─ menubar inbox
 ```
 
 The **transport** is just the channel your machines post to and your Mac reads from. There
-is no Agent Inbox server; the transport is somebody else's, and you pick which.
+is no Agent Inbox server: it is [ntfy](https://ntfy.sh), either the free public one or your
+own.
 
 ## Install
 
@@ -92,9 +95,9 @@ Restart any running Claude Code sessions there too.
 > and Claude's replies. If two people share a topic or a webhook, they each read the
 > other's sessions, in both directions.
 
-## Choosing a transport
+## The transport
 
-**ntfy is the default, and you can skip this section.**
+**There is nothing to choose and nothing to set up. Skip this section.**
 
 [ntfy.sh](https://ntfy.sh) is a free, open-source pub/sub service. There is no signup, no
 bot and no webhook: a channel is just a topic name. Anyone who knows the topic can read it,
@@ -112,9 +115,7 @@ messages. The app takes one in **Settings**, or with
 Keychain and mirrored to `~/.agent-inbox/ntfy-token` for the bash senders. Leave it empty
 for ntfy.sh, which has no accounts.
 
-Choose **Discord** when you want a durable, browsable archive of every session, plus phone
-push through an app you probably already run. It costs a bot and a private channel to set
-up. See [Setting up Discord](#setting-up-discord).
+
 
 ## What a notification looks like
 
@@ -195,7 +196,6 @@ and working directory paths. So:
 - **ntfy:** treat the generated topic like a password. Anyone who has it can read your
   messages. Self-host if that isn't good enough, and add a token so the topic name grants
   nothing on its own.
-- **Discord:** use a private channel, not one other people are in.
 - Either way, think twice if you work on sensitive codebases.
 
 ## Updates
@@ -205,35 +205,6 @@ The app checks once a day and installs updates itself
 with our key). Turn it off in **Settings → Updates**, or check on demand from the menu.
 
 Installed with Homebrew? `brew upgrade --cask agent-inbox` works too. Either path is fine.
-
-## Setting up Discord
-
-Everything below is optional. ntfy needs none of it.
-
-1. Create a Discord bot in the [developer portal](https://discord.com/developers/applications)
-   and invite it to your server with permission to manage channels and webhooks.
-2. Clone this repo and provision a private channel plus its webhook:
-   ```bash
-   git clone https://github.com/Ideaplaces/agent-inbox.git && cd agent-inbox
-   AGENT_INBOX_GUILD=<server-id> AGENT_INBOX_BOT_TOKEN=<bot-token> \
-     ./setup-user.sh <name> <your-discord-user-id>
-   ```
-   It prints the channel id and webhook URL you need next.
-3. **On your Mac**, open **Settings → Transport**, choose Discord, and paste the bot token,
-   channel id, server id, and webhook URL. Nothing to run in a terminal.
-4. **On every other machine**, use the same one-line installer as before with the webhook
-   instead of a topic:
-   ```bash
-   curl -fsSL https://raw.githubusercontent.com/Ideaplaces/agent-inbox/main/install-remote.sh \
-     | bash -s -- --discord-webhook '<webhook-url>' --host-label <name-for-this-machine>
-   ```
-
-The bot token is only needed on your Mac, because that is the side that reads messages back.
-Sending machines only need the webhook URL, so a dev box can post but cannot read your
-history.
-
-**Azure Key Vault users:** set `AGENT_INBOX_VAULT` and use `--keyvault <name>` to keep the
-webhook out of your shell history.
 
 ## Config
 

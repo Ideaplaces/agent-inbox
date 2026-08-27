@@ -148,82 +148,44 @@ struct TransportPicker: View {
         @Bindable var settings = model.settings
 
         VStack(alignment: .leading, spacing: 10) {
-            Picker("", selection: $settings.transport) {
-                Text("ntfy").tag(TransportKind.ntfy)
-                Text("Discord").tag(TransportKind.discord)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .onChange(of: settings.transport) { _, _ in model.poller.restart() }
-
-            Text(settings.transport == .discord
-                 ? "A private channel keeps a browsable history you can scroll back through, at the cost of a bot and a webhook to set up."
-                 : "Recommended. No account, no bot, nothing to provision. Messages are cached for about 12 hours, so the menubar is your history rather than the feed.")
+            Text("No account, no bot, nothing to provision. A topic name is the whole channel, and one has already been generated for you.")
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            switch settings.transport {
-            case .ntfy, .none:
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        TextField("topic", text: $settings.ntfyTopic)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(size: 11, design: .monospaced))
-                        Button("Generate") {
-                            settings.ntfyTopic = AppSettings.randomNtfyTopic()
-                            settings.transport = .ntfy
-                            model.poller.restart()
-                        }
-                        .controlSize(.small)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    TextField("topic", text: $settings.ntfyTopic)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 11, design: .monospaced))
+                    Button("Generate") {
+                        settings.ntfyTopic = AppSettings.randomNtfyTopic()
+                        settings.transport = .ntfy
+                        model.poller.restart()
                     }
-                    Text("The topic name is the whole secret: anyone who knows it can read your messages. Generate a long one and keep it private.")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    LabeledContent("Server") {
-                        TextField(AppSettings.publicNtfyServer, text: $settings.ntfyServer)
+                    .controlSize(.small)
+                }
+                Text("The topic name is the whole secret: anyone who knows it can read your messages. Generate a long one and keep it private.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                LabeledContent("Server") {
+                    TextField(AppSettings.publicNtfyServer, text: $settings.ntfyServer)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 11))
+                }
+                .font(.system(size: 11))
+                // Only meaningful on a self-hosted server. ntfy.sh has no
+                // accounts, so showing this against the default would
+                // invite people to fill in a field that does nothing.
+                if settings.ntfyServer != AppSettings.publicNtfyServer {
+                    LabeledContent("Token") {
+                        SecureField("optional", text: $settings.ntfyToken)
                             .textFieldStyle(.roundedBorder)
                             .font(.system(size: 11))
                     }
                     .font(.system(size: 11))
-                    // Only meaningful on a self-hosted server. ntfy.sh has no
-                    // accounts, so showing this against the default would
-                    // invite people to fill in a field that does nothing.
-                    if settings.ntfyServer != AppSettings.publicNtfyServer {
-                        LabeledContent("Token") {
-                            SecureField("optional", text: $settings.ntfyToken)
-                                .textFieldStyle(.roundedBorder)
-                                .font(.system(size: 11))
-                        }
-                        .font(.system(size: 11))
-                    }
                 }
-            case .discord:
-                VStack(alignment: .leading, spacing: 6) {
-                    LabeledContent("Bot token") {
-                        SecureField("", text: $settings.discordBotToken)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                    LabeledContent("Channel ID") {
-                        TextField("", text: $settings.discordChannelID)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                    LabeledContent("Server ID") {
-                        TextField("optional", text: $settings.discordGuildID)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                    LabeledContent("Webhook URL") {
-                        SecureField("used by senders", text: $settings.discordWebhookURL)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                    Text("The bot token is only needed here, to read messages back. Sending machines use the webhook URL.")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .font(.system(size: 11))
-                .onChange(of: settings.discordChannelID) { _, _ in model.poller.restart() }
             }
         }
     }

@@ -18,9 +18,9 @@ interesting parts are:
 - **The transport.** Notification bodies carry snippets of your prompts and
   Claude's replies, repo names and working directory paths. Anything that
   discloses those to someone who should not have them.
-- **The ntfy token or a Discord webhook leaking.** Both are credentials. They
-  live in the Keychain and in `~/.agent-inbox/` at `0600`, never in `config`,
-  which is world-readable by design.
+- **The ntfy token leaking.** It is a credential. It lives in the Keychain and
+  in `~/.agent-inbox/ntfy-token` at `0600`, never in `config`, which is
+  world-readable by design.
 - **`notify.sh`.** It runs inside every Claude Code session on every machine you
   install it on. Command injection from a prompt, a repo name, or a transcript
   would be serious.
