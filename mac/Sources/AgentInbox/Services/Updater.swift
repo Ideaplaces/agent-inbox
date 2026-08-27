@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import ObjectiveC
 import Sparkle
 
 /// In-app updates.
@@ -27,7 +28,13 @@ final class Updater {
         // host it fails and puts "Unable to Check For Updates ... verify you
         // have the latest version of xctest" on screen, which is both alarming
         // and unrelated to whatever is being tested.
-        let underTest = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        // Detected by the presence of the XCTest runtime, not by
+        // XCTestConfigurationFilePath: that variable is set by Xcode and not by
+        // SwiftPM's runner, so `swift test` slipped straight past it. Sparkle
+        // then started, failed, and put up a modal alert, which blocks the run
+        // loop until somebody clicks it. A test suite that hangs until a human
+        // notices is worse than one that fails.
+        let underTest = NSClassFromString("XCTestCase") != nil
         controller = SPUStandardUpdaterController(
             startingUpdater: !underTest, updaterDelegate: nil, userDriverDelegate: nil)
         observeCanCheck()
