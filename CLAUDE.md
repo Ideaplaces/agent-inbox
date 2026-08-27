@@ -1,98 +1,31 @@
 # Agent Inbox: working notes
 
-The Mac app lives in `mac/`. The senders are bash at the repo root. Read
-`mac/README.md` for the architecture and the design decisions; this file is the
-operational half: how to cut a release, and what cannot be done without a human.
+The Mac app is in `mac/`, the senders are bash at the repo root. `mac/README.md`
+has the architecture and the design decisions; this file is what someone
+changing the code needs to know.
 
-## Cutting a release
+Release credentials, the signing certificate and the machine that builds the
+DMG are deliberately not here. They are IdeaPlaces-internal and this repository
+is public.
 
-One step. There is no version file to edit: the workflow takes the version from
-the tag and rejects anything that is not `vMAJOR.MINOR.PATCH`.
-
-```bash
-git tag -a v0.1.5 -m "Agent Inbox 0.1.5
-
-<what changed>"
-git push origin v0.1.5
-```
-
-That builds universal, signs with Developer ID, notarizes and staples **both the
-app and the DMG**, publishes the GitHub release, and commits `appcast.xml` so
-installed copies can see the update. The Homebrew tap bumps itself within 30
-minutes.
-
-**Verify the published artifact rather than the green check.** Every failure in
-this pipeline has been silent, so a passing workflow is not evidence:
+## Local development
 
 ```bash
-gh release download v0.1.5 -p "*.dmg"
-spctl --assess --type open --context context:primary-signature -vv AgentInbox-0.1.5.dmg
-# want: accepted / source=Notarized Developer ID
-
-curl -s https://raw.githubusercontent.com/Ideaplaces/agent-inbox/main/appcast.xml \
-  | grep -E "sparkle:version|shortVersionString"
-# the build number must be HIGHER than the installed one, or no update is offered
+cd mac
+swift test          # no network, no side effects
+./build.sh --debug  # ad-hoc signed, host architecture, fine for running yourself
+SIGN_IDENTITY="Developer ID Application: ..." ./build.sh
 ```
 
-## What runs on its own
+Copying a local build over `/Applications` replaces the released one, so brew's
+recorded version will disagree with what is installed until the next upgrade.
+Harmless, but it explains the mismatch.
 
-| Trigger | What happens |
-|---|---|
-| Any push or PR | Swift tests, universal build, DMG packaging, shellcheck |
-| A `v*` tag | Sign, notarize and staple app + DMG, publish release, commit appcast |
-| Every 30 min, in `Ideaplaces/homebrew-tap` | The tap bumps its own casks from the latest release |
+The senders are testable without a transport:
 
-Both Mac jobs run on a **self-hosted runner**, Chip's MacBook, labelled
-`self-hosted, macOS, ARM64, chip-macbook, xcode26` and registered against this
-repo. A tag therefore only builds while that machine is awake; until then the
-job queues rather than failing. That tradeoff is deliberate, see the SDK note
-below.
-
-**The tap updates itself; nothing pushes to it.** A cross-repo push needs a
-credential the org cannot issue, so the direction was inverted: a workflow can
-always write to its own repository, and reading a public repo's releases needs no
-auth. This is a decision, not a gap. Do not "fix" it by adding a token.
-
-## What needs a human
-
-Everything here requires a browser or a GUI. Ask rather than spending time
-trying to automate it, and name which one you need.
-
-| What | Why it cannot be scripted |
-|---|---|
-| A GitHub PAT | No API exists to create one |
-| A GitHub App | The manifest flow ends in a browser click |
-| Enabling deploy keys | Disabled by org policy; changing it needs `admin:org` |
-| Workflow write permissions | Same policy. Not needed anyway, see above |
-| Renewing the signing certificate | Xcode → Settings → Accounts → Manage Certificates. Account Holder only, capped at five per team. **Expires 1 February 2027** |
-| Exporting that certificate as `.p12` | `security export` is refused by the key's ACL. Keychain Access → My Certificates → Export |
-| An App Store Connect API key | Downloadable exactly once, from the browser |
-| Full Disk Access grants | System Settings, and the file picker needs ⌘⇧G to reach `/opt` |
-| Clicking Check for Updates | The one link in the update chain that cannot be driven headlessly |
-
-## Credentials
-
-Held in Azure Key Vault `kv-ideaplaces` and mirrored to this repo's Actions
-secrets. The secret names are already visible in
-`.github/workflows/release.yml`; the values are not.
-
-| Key Vault | Actions secret |
-|---|---|
-| `apple-developer-id-p12-base64` | `MACOS_CERTIFICATE` |
-| `apple-developer-id-p12-password` | `MACOS_CERTIFICATE_PASSWORD` |
-| `apple-developer-id-sign-identity` | `MACOS_SIGN_IDENTITY` |
-| `apple-notary-api-key` | `APPLE_API_KEY` (base64) |
-| `apple-notary-key-id` | `APPLE_API_KEY_ID` |
-| `apple-notary-issuer-id` | `APPLE_API_ISSUER` |
-| `sparkle-eddsa-private-key` | `SPARKLE_PRIVATE_KEY` |
-| `sparkle-eddsa-public-key` | in `Info.plist` as `SUPublicEDKey` |
-
-Verify a round-trip before trusting the vault. `az` appends a trailing newline to
-text secrets, which is harmless for the `.p8` but makes a naive `diff` report a
-difference that is not there.
-
-**Losing the Sparkle private key means no installed copy can ever update again.**
-It is the only irrecoverable secret here.
+```bash
+./test-notify.sh    # runs notify.sh against a throwaway HOME, prints instead of posting
+```
 
 ## Gotchas already paid for
 
@@ -148,19 +81,6 @@ docs.ideaplaces.com/devops/macos-app-signing.
 - **Test the binary you think you are testing.** A `--configure` flag appeared to
   hang through several rounds of debugging because `/Applications` held the
   released build, which predated the flag.
-
-## Local development
-
-```bash
-cd mac
-swift test          # 29 checks, no network, no side effects
-./build.sh --debug  # ad-hoc signed, host architecture, fine for running yourself
-SIGN_IDENTITY="Developer ID Application: IdeaPlaces Inc. (648L7A4BL2)" ./build.sh
-```
-
-Copying a local build over `/Applications` replaces the released one, so brew's
-recorded version will disagree with what is installed until the next upgrade.
-Harmless, but it explains the mismatch.
 
 ## Keep README.md current
 
