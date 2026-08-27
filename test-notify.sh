@@ -420,17 +420,27 @@ else
   ok "a session that never reported publishes no clear"
 fi
 
-# The control event is ntfy's business. Discord is a record of what happened,
-# and "the user started typing" is not something to keep forever.
+# The control event is ntfy's business, and ntfy is now the only transport.
 stub_curl_home
-printf 'https://discord.example.com/webhook' > "$HOME/.agent-inbox/webhook-url"
 send_for_real stop "$(printf '{"session_id":"%s","cwd":"/tmp/repo"}' "$SID")"
 : > "$CURL_ARGS"
 send_for_real prompt "$(prompt_payload 'go on')"
-if grep -q "discord.example.com" "$CURL_ARGS"; then
-  fail "the clear is not sent to Discord" "args: $(tr '\n' ' ' < "$CURL_ARGS")"
+if grep -q "ntfy.example.com" "$CURL_ARGS"; then
+  ok "the clear goes to the configured ntfy server"
 else
-  ok "the clear goes to ntfy only, never to Discord"
+  fail "the clear goes to the configured ntfy server" "args: $(tr '\n' ' ' < "$CURL_ARGS")"
+fi
+
+# A machine that used to send to Discord must stop. notify.sh no longer reads
+# webhook-url at all, so a leftover file is inert rather than a live sender.
+stub_curl_home
+printf 'https://discord.example.com/webhook' > "$HOME/.agent-inbox/webhook-url"
+: > "$CURL_ARGS"
+send_for_real notification "$(notif_payload)"
+if grep -q "discord.example.com" "$CURL_ARGS"; then
+  fail "a leftover webhook file is not a live sender" "args: $(tr '\n' ' ' < "$CURL_ARGS")"
+else
+  ok "a leftover Discord webhook file no longer sends anything"
 fi
 
 rm -f "$CT" "$TR"

@@ -22,8 +22,14 @@ final class Updater {
     init() {
         // startingUpdater: true schedules the background checks described by
         // SUScheduledCheckInterval in Info.plist.
+        //
+        // Never under XCTest. Sparkle needs a real app bundle, so inside a test
+        // host it fails and puts "Unable to Check For Updates ... verify you
+        // have the latest version of xctest" on screen, which is both alarming
+        // and unrelated to whatever is being tested.
+        let underTest = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
         controller = SPUStandardUpdaterController(
-            startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+            startingUpdater: !underTest, updaterDelegate: nil, userDriverDelegate: nil)
         observeCanCheck()
     }
 

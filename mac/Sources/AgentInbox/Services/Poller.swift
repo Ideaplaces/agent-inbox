@@ -84,7 +84,6 @@ final class Poller {
         switch settings.transport {
         case .none: return "cursor.none"
         case .ntfy: return "cursor.ntfy.\(settings.ntfyServer)/\(settings.ntfyTopic)"
-        case .discord: return "cursor.discord.\(settings.discordChannelID)"
         }
     }
 
@@ -102,12 +101,6 @@ final class Poller {
             return NtfyTransport(
                 server: settings.ntfyServer, topic: settings.ntfyTopic,
                 token: settings.ntfyToken)
-        case .discord:
-            guard !settings.discordBotToken.isEmpty, !settings.discordChannelID.isEmpty else {
-                return nil
-            }
-            return DiscordTransport(
-                token: settings.discordBotToken, channelID: settings.discordChannelID)
         }
     }
 

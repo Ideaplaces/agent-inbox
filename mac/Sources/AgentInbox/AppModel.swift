@@ -18,7 +18,13 @@ final class AppModel {
     /// Shown in the menu when a background action has something to say.
     var transientMessage: String?
 
-    private init() {
+    /// Not private, so a tool can build an isolated one.
+    ///
+    /// The screenshot generator needs a model whose inbox it controls rather
+    /// than whatever happens to be waiting on the machine. Point
+    /// `SenderConfig.directory` at a scratch path first and it reads and writes
+    /// nothing real.
+    init() {
         let presence = Presence()
         self.presence = presence
         self.store = InboxStore(presence: presence)
@@ -87,10 +93,6 @@ final class AppModel {
         switch settings.transport {
         case .ntfy:
             return "\(base) --ntfy \(settings.ntfyTopic)"
-        case .discord:
-            let url = settings.discordWebhookURL.isEmpty
-                ? "<discord-webhook-url>" : settings.discordWebhookURL
-            return "\(base) --discord-webhook '\(url)'"
         case .none:
             return "\(base) --ntfy <topic>"
         }
@@ -145,19 +147,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 }
                 settings.transport = .ntfy
                 print("configured ntfy topic")
-            case "discord":
-                guard let token = value("--bot-token"), !token.isEmpty,
-                      let channel = value("--channel-id"), !channel.isEmpty else {
-                    fail("--transport discord requires --bot-token and --channel-id")
-                }
-                settings.discordBotToken = token
-                settings.discordChannelID = channel
-                settings.discordGuildID = value("--guild-id") ?? ""
-                settings.discordWebhookURL = value("--webhook") ?? ""
-                settings.transport = .discord
-                print("configured Discord channel \(channel)")
             default:
-                fail("--configure requires --transport ntfy|discord")
+                fail("--configure requires --transport ntfy")
             }
 
             if let label = value("--host-label"), !label.isEmpty {

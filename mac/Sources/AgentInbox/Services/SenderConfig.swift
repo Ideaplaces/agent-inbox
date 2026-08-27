@@ -102,14 +102,6 @@ enum SenderConfig {
             } else {
                 write(settings.ntfyToken, to: "ntfy-token")
             }
-        case .discord:
-            if !settings.discordWebhookURL.isEmpty {
-                write(settings.discordWebhookURL, to: "webhook-url")
-            }
-            write(settings.discordChannelID, to: "channel-id", mode: 0o644)
-            if !settings.discordGuildID.isEmpty {
-                write(settings.discordGuildID, to: "guild-id", mode: 0o644)
-            }
         case .none:
             break
         }
@@ -131,15 +123,21 @@ enum SenderConfig {
         write(lines.joined(separator: "\n") + "\n", to: "config", mode: 0o644)
     }
 
-    /// Files a sender reads for each transport. Anything not owned by the
-    /// selected one is removed, so the disk says exactly one thing.
+    /// Files a sender reads, and the transport each belongs to. Anything not
+    /// owned by the selected one is removed, so the disk says exactly one thing.
+    ///
+    /// The Discord entries stay after the transport itself was removed: an
+    /// install that used it still has those files, and `notify.sh` posts to
+    /// whatever it finds. Without this the app would go quiet about Discord
+    /// while every session kept publishing to it.
     private static func retireFiles(notUsedBy transport: TransportKind) {
         let owned: [TransportKind: [String]] = [
             .ntfy: ["ntfy-topic", "ntfy-token"],
-            .discord: ["webhook-url", "channel-id", "guild-id"],
         ]
+        let retiredByRemovedTransports = ["webhook-url", "channel-id", "guild-id"]
         let keep = Set(owned[transport] ?? [])
-        for name in owned.values.flatMap({ $0 }) where !keep.contains(name) {
+        for name in owned.values.flatMap({ $0 }) + retiredByRemovedTransports
+        where !keep.contains(name) {
             try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
         }
     }
