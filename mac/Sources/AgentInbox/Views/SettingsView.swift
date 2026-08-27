@@ -17,7 +17,7 @@ struct SettingsView: View {
 }
 
 @MainActor
-private struct GeneralSettings: View {
+struct GeneralSettings: View {
     @Environment(AppModel.self) private var model
     @State private var launchAtLogin = LoginItem.isEnabled
 
@@ -146,7 +146,7 @@ private struct GeneralSettings: View {
 }
 
 @MainActor
-private struct TransportSettings: View {
+struct TransportSettings: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
@@ -193,7 +193,7 @@ private struct TransportSettings: View {
 }
 
 @MainActor
-private struct MachineSettings: View {
+struct MachineSettings: View {
     @Environment(AppModel.self) private var model
     @State private var copied = false
 

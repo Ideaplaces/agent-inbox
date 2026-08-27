@@ -206,6 +206,21 @@ with our key). Turn it off in **Settings → Updates**, or check on demand from 
 
 Installed with Homebrew? `brew upgrade --cask agent-inbox` works too. Either path is fine.
 
+## What it looks like
+
+Setup, which is the whole of it: a topic is already generated, and the two buttons install
+the hooks here and give you the line to paste on your other machines.
+
+![The setup window](docs/welcome.png)
+
+Settings, in three tabs.
+
+![General settings](docs/settings-general.png)
+
+![Transport settings](docs/settings-transport.png)
+
+![The machines that have reported in](docs/settings-machines.png)
+
 ## Config
 
 The app owns its own settings, in **Settings**. The only file you might touch is
@@ -270,11 +285,8 @@ The senders are plain bash and work on their own, so you can skip the app entire
 the transport's history as your inbox. Clone the repo and run
 `./install.sh --ntfy <topic>` for the hooks and nothing else.
 
-`install-mac-watcher.sh`, `watch-mac.sh` and `swiftbar-plugin/` are the previous Mac
-surface, kept for anyone still running it. **Do not run them alongside the app**, or every
-event arrives twice. If you are upgrading from that setup, the app adopts your existing
-`~/.agent-inbox/` config on first launch (same transport, same host label, nothing to
-retype; your old `config` is kept as `config.bak.agent-inbox`). Then retire the old one:
+There used to be a SwiftBar-based Mac surface here. It is gone: the app replaced it and
+running both delivered every event twice. If you still have it installed, retire it:
 
 ```bash
 launchctl unload ~/Library/LaunchAgents/com.agent-inbox.watcher.plist
@@ -282,8 +294,10 @@ rm ~/Library/LaunchAgents/com.agent-inbox.watcher.plist
 rm "$(defaults read com.ameba.SwiftBar PluginDirectory)/agent-inbox.5s.sh"
 ```
 
-Installing hooks from the app replaces any hook pointing at an older `notify.sh`, so you
-never end up with two copies of every event.
+The app adopts your existing `~/.agent-inbox/` config on first launch, so there is nothing
+to retype, and your old `config` is kept as `config.bak.agent-inbox`. Installing hooks from
+the app also replaces any hook pointing at an older `notify.sh`, so you never end up with
+two copies of every event.
 
 ## Roadmap
 

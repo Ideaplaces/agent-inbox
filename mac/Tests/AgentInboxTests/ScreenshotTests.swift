@@ -62,38 +62,36 @@ final class ScreenshotTests: XCTestCase {
         // Far offscreen: it must be in a window to lay out and draw, but it
         // should never appear on anyone's display while this runs.
         window.setFrameOrigin(NSPoint(x: -30_000, y: -30_000))
-        window.orderFrontRegardless()
+        // Key, not merely ordered in. A text field's placeholder is drawn by its
+        // cell, and in a window that never becomes key the cell draws it
+        // unclipped at the view's origin, so every placeholder appears beside
+        // its box as though the value had been printed twice.
+        window.makeKeyAndOrderFront(nil)
         // Let SwiftUI settle. The list's height comes from a measurement that
         // lands on the pass after the one that asked for it, so a single pass
         // renders it empty.
-        host.wantsLayer = true
-        // Let SwiftUI settle. Two things need the extra passes: the list's
-        // height comes from a measurement that lands after the pass that asked
-        // for it, and text arrives in sublayers committed a beat later than the
-        // icons around it. Capture too early and the result looks like a font
-        // problem, with every glyph missing and the chrome intact.
-        RunLoop.current.run(until: Date().addingTimeInterval(2.0))
+        // Let SwiftUI settle. The list's height comes from a measurement that
+        // lands on the pass after the one that asked for it, so capturing
+        // immediately renders an empty box where the rows belong.
+        RunLoop.current.run(until: Date().addingTimeInterval(1.0))
+        host.layoutSubtreeIfNeeded()
 
-        let layer = try XCTUnwrap(host.layer, "no layer to render")
-        let scale = 2
-        let pixels = (w: Int(host.bounds.width) * scale, h: Int(host.bounds.height) * scale)
-        let context = try XCTUnwrap(CGContext(
-            data: nil, width: pixels.w, height: pixels.h, bitsPerComponent: 8, bytesPerRow: 0,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        // cacheDisplay, not layer.render(in:). A text field is backed by an
+        // AppKit control whose text ends up both in the layer contents and in
+        // an unclipped sublayer, so rendering the layer tree draws every field's
+        // value twice: once inside the box and once spilling out beside it.
+        // cacheDisplay goes through the ordinary draw path, which clips.
+        let rep = try XCTUnwrap(
+            host.bitmapImageRepForCachingDisplay(in: host.bounds),
+            "no bitmap rep for the view")
+        host.cacheDisplay(in: host.bounds, to: rep)
 
-        // CGContext draws from the bottom left, AppKit lays out from the top
-        // left, so without the flip every screenshot comes out upside down.
-        context.translateBy(x: 0, y: CGFloat(pixels.h))
-        context.scaleBy(x: CGFloat(scale), y: -CGFloat(scale))
-        layer.render(in: context)
-
-        let image = try XCTUnwrap(context.makeImage())
         let png = try XCTUnwrap(
-            NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
+            rep.representation(using: .png, properties: [:]), "could not encode a png")
+
         let out = docs.appendingPathComponent("\(name).png")
         try png.write(to: out)
-        print("wrote \(out.lastPathComponent) \(pixels.w)x\(pixels.h)")
+        print("wrote \(out.lastPathComponent) \(rep.pixelsWide)x\(rep.pixelsHigh)")
         window.orderOut(nil)
     }
 
@@ -145,9 +143,19 @@ final class ScreenshotTests: XCTestCase {
             MenuContentView().environment(model(withItems: [])),
             width: 560, named: "menubar-empty")
 
+        // The panes on their own rather than SettingsView, which is a TabView:
+        // its tab strip does not draw in a bare hosting view, and asking the
+        // TabView for a fitting size stacks every tab's content together, which
+        // lays the controls out at a size no window would give them.
         try capture(
-            SettingsView().environment(model(withItems: [])),
-            width: 520, named: "settings")
+            GeneralSettings().environment(model(withItems: [])),
+            width: 520, named: "settings-general")
+        try capture(
+            TransportSettings().environment(model(withItems: [])),
+            width: 520, named: "settings-transport")
+        try capture(
+            MachineSettings().environment(model(withItems: [])),
+            width: 520, named: "settings-machines")
 
         try capture(
             WelcomeView().environment(model(withItems: [])),
