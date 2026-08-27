@@ -130,6 +130,21 @@ docs.ideaplaces.com/devops/macos-app-signing.
   same source built with the macOS 26 SDK goes 652 -> 157 across the same
   shrink. Check with `vtool -arch arm64 -show-build <binary> | grep sdk` before
   chasing a layout problem that only appears on one Mac.
+- **A Focus profile silences notifications and nothing in the API says so.**
+  `UNUserNotificationCenter` reported `authorized`, `alert: enabled`,
+  `sound: enabled`; audio output was fine; and `"Pop"`, `"Pop.aiff"` and
+  `.default` were all silent. A Focus mode the app cannot see was filtering it.
+  Before chasing a sound name or a permission, ask whether Focus is on: the app
+  has no way to detect it and `add()` reports success either way.
+- **The hook runs `~/.agent-inbox/bin/notify.sh`, not your checkout.** The app
+  unpacks it from the bundle at launch, so a fix in the repo does nothing until
+  a build carrying it is installed. A local build made before the fix will
+  happily overwrite the good copy. Check with `grep` against the installed file,
+  not the one you edited.
+- **A file left by a transport you stopped using keeps sending.** `notify.sh`
+  posts to whatever it finds in `~/.agent-inbox/`, so switching the app from
+  Discord to ntfy left every session publishing to both for days with nothing
+  to show it. The writer now retires the other transport's files.
 - **Test the binary you think you are testing.** A `--configure` flag appeared to
   hang through several rounds of debugging because `/Applications` held the
   released build, which predated the flag.

@@ -81,6 +81,13 @@ enum SenderConfig {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         backupExistingConfigOnce()
 
+        // The selected transport is the whole answer, so the files belonging to
+        // the others have to go. Leaving them is not harmless: `notify.sh`
+        // sends to whatever it finds on disk, so switching the app from Discord
+        // to ntfy left every session publishing to both indefinitely, with
+        // nothing anywhere to show it was still happening.
+        retireFiles(notUsedBy: settings.transport)
+
         switch settings.transport {
         case .ntfy:
             write(settings.ntfyTopic, to: "ntfy-topic")
@@ -122,6 +129,19 @@ enum SenderConfig {
             lines.append("NTFY_SERVER=\"\(settings.ntfyServer)\"")
         }
         write(lines.joined(separator: "\n") + "\n", to: "config", mode: 0o644)
+    }
+
+    /// Files a sender reads for each transport. Anything not owned by the
+    /// selected one is removed, so the disk says exactly one thing.
+    private static func retireFiles(notUsedBy transport: TransportKind) {
+        let owned: [TransportKind: [String]] = [
+            .ntfy: ["ntfy-topic", "ntfy-token"],
+            .discord: ["webhook-url", "channel-id", "guild-id"],
+        ]
+        let keep = Set(owned[transport] ?? [])
+        for name in owned.values.flatMap({ $0 }) where !keep.contains(name) {
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+        }
     }
 
     /// Copy the bundled `notify.sh` to a stable path outside the app bundle.
