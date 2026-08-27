@@ -101,7 +101,7 @@ final class AppSettings {
             "watchMode": "all",
             "watchTags": AppSettings.defaultWatchTags,
             "muteTag": AppSettings.defaultMuteTag,
-            "soundName": "",
+            "soundName": AppSettings.defaultSoundName,
         ])
         transport = TransportKind(rawValue: defaults.string(forKey: "transport") ?? "") ?? .none
         // ntfy is the default because it needs no account, no bot, and no
@@ -113,7 +113,7 @@ final class AppSettings {
         pollSeconds = defaults.integer(forKey: "pollSeconds")
         expireMinutes = defaults.integer(forKey: "expireMinutes")
         idleThreshold = defaults.integer(forKey: "idleThreshold")
-        soundName = defaults.string(forKey: "soundName") ?? ""
+        soundName = defaults.string(forKey: "soundName") ?? Self.defaultSoundName
         minSeconds = defaults.integer(forKey: "minSeconds")
         watchMode = defaults.string(forKey: "watchMode") ?? "all"
         watchTags = defaults.string(forKey: "watchTags") ?? AppSettings.defaultWatchTags
@@ -152,6 +152,16 @@ final class AppSettings {
     /// field is shown at all. When they were three string literals, changing
     /// the default would have left the token field hidden on a server that
     /// needs one, and the failure is a silent 403 with an empty inbox.
+    /// The banner sound a fresh install gets.
+    ///
+    /// A notification you have to be looking at is half a notification, and the
+    /// whole point is to be told while you are doing something else. Silent was
+    /// the old default and meant most people never heard a single one.
+    ///
+    /// Named without an extension, which is what resolves against the system
+    /// sounds in /System/Library/Sounds. Set it to "" for silence.
+    nonisolated static let defaultSoundName = "Pop"
+
     nonisolated static let publicNtfyServer = "https://ntfy.sh"
 
     nonisolated static func randomNtfyTopic() -> String {

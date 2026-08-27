@@ -19,6 +19,27 @@ final class ZeroSetupDefaultTests: XCTestCase {
         XCTAssertEqual(SenderSnapshot(transport: .ntfy).ntfyToken, "")
     }
 
+    func testAFreshInstallMakesASound() {
+        // Silent was the old default, so most installs never made one. A
+        // notification you have to be looking at is half a notification.
+        XCTAssertEqual(AppSettings.defaultSoundName, "Pop")
+    }
+
+    func testTheDefaultSoundIsOneTheSettingsPickerOffers() {
+        // A default that is not in the list shows as a blank selection, and
+        // touching the picker at all would silently change it.
+        let offered = ["", "Glass", "Ping", "Pop", "Blow", "Bottle", "Funk", "Hero",
+                       "Morse", "Purr", "Submarine"]
+        XCTAssertTrue(offered.contains(AppSettings.defaultSoundName))
+    }
+
+    func testTheDefaultSoundNamesAFileMacOSCanFind() {
+        // UNNotificationSound resolves a bare name against /System/Library/Sounds.
+        // A name with no file there is not an error: the banner is just silent.
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: "/System/Library/Sounds/\(AppSettings.defaultSoundName).aiff"))
+    }
+
     func testAGeneratedTopicIsTheSecretSoItHasToBeUnguessable() {
         // The topic is the only thing protecting messages on the public server,
         // so it carries real entropy rather than being a readable name.

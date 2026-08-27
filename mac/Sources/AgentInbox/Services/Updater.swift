@@ -50,7 +50,13 @@ final class Updater {
     }
 
     var currentVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        // Bundle.main is the app only when the app is what is running. Under
+        // XCTest it is the test host, whose version has nothing to do with this
+        // app: the generated settings screenshot read "Version 16.0", which in a
+        // README looks like a bug in the app rather than in the capture.
+        if NSClassFromString("XCTestCase") != nil { return "0.0.0" }
+        return Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+            ?? "?"
     }
 
     func checkForUpdates() {

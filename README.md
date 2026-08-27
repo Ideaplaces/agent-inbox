@@ -242,6 +242,13 @@ running as another user can read it, so the token lives in `~/.agent-inbox/ntfy-
 
 These are sender-side only, and the app writes them itself so the two can never disagree.
 Poll interval, sound, expiry and idle threshold are app-side and live in Settings.
+Notifications play **Pop** by default; **Settings → General → Sound** changes it, and
+`Silent` turns it off.
+
+A banner that never makes a sound is easy to miss entirely, so if you are getting nothing:
+check **System Settings → Notifications → Agent Inbox**, and check whether a **Focus** mode
+is filtering it. A Focus can silence an app while the notification API still reports sound
+as enabled, so nothing in the app can warn you about it.
 
 Runtime state also lives in `~/.agent-inbox/`: `bin/notify.sh` (unpacked from the app),
 the sender's transport config, `state/<session>.start` (turn timers), `presence` (seconds
