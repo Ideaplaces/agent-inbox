@@ -179,3 +179,63 @@ final class NtfyTokenConfigTests: XCTestCase {
         XCTAssertTrue(contents("config")?.contains("https://ntfy.example.com:8443") ?? false)
     }
 }
+
+
+/// Switching transport has to leave the disk saying one thing.
+///
+/// `notify.sh` sends to whatever it finds in `~/.agent-inbox/`, so a file left
+/// behind by a transport nobody selected any more is not inert: it keeps
+/// publishing. Moving the app from Discord to ntfy left every session going to
+/// both for days, and nothing anywhere showed it.
+@MainActor
+final class TransportFileRetirementTests: XCTestCase {
+    private var dir: URL!
+
+    override func setUp() {
+        super.setUp()
+        dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString)
+        SenderConfig.directory = dir
+    }
+
+    override func tearDown() {
+        try? FileManager.default.removeItem(at: dir)
+        super.tearDown()
+    }
+
+    private func exists(_ name: String) -> Bool {
+        FileManager.default.fileExists(atPath: dir.appendingPathComponent(name).path)
+    }
+
+    func testMovingToNtfyStopsTheSenderPublishingToDiscord() {
+        SenderConfig.write(
+            SenderSnapshot(transport: .discord, discordWebhookURL: "https://discord/x",
+                           discordChannelID: "123", discordGuildID: "456"))
+        XCTAssertTrue(exists("webhook-url"))
+
+        SenderConfig.write(SenderSnapshot(transport: .ntfy, ntfyTopic: "t", ntfyToken: "tk"))
+        XCTAssertFalse(exists("webhook-url"), "the sender would still be posting to Discord")
+        XCTAssertFalse(exists("channel-id"))
+        XCTAssertFalse(exists("guild-id"))
+        XCTAssertTrue(exists("ntfy-topic"))
+        XCTAssertTrue(exists("ntfy-token"))
+    }
+
+    func testMovingToDiscordStopsTheSenderPublishingToNtfy() {
+        SenderConfig.write(SenderSnapshot(transport: .ntfy, ntfyTopic: "t", ntfyToken: "tk"))
+        SenderConfig.write(
+            SenderSnapshot(transport: .discord, discordWebhookURL: "https://discord/x",
+                           discordChannelID: "123"))
+        XCTAssertFalse(exists("ntfy-topic"))
+        XCTAssertFalse(exists("ntfy-token"), "a credential outliving its transport")
+        XCTAssertTrue(exists("webhook-url"))
+    }
+
+    func testChoosingNoTransportLeavesNothingBehindToSendWith() {
+        SenderConfig.write(SenderSnapshot(transport: .ntfy, ntfyTopic: "t", ntfyToken: "tk"))
+        SenderConfig.write(SenderSnapshot(transport: .none))
+        XCTAssertFalse(exists("ntfy-topic"))
+        XCTAssertFalse(exists("ntfy-token"))
+        XCTAssertFalse(exists("webhook-url"))
+    }
+}
