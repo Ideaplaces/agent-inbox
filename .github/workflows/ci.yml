@@ -8,11 +8,21 @@ on:
 jobs:
   mac-app:
     name: Mac app
-    # Chip's MacBook, registered as a repo runner. The hosted macos images lag
-    # the SDK the app is actually used on, and a menubar app's layout comes
+    # A personal MacBook, registered as a repo runner. The hosted macos images
+    # lag the SDK the app is actually used on, and a menubar app's layout comes
     # from the SDK it was built against, so building on a current Mac is not a
     # speed optimisation, it is what makes the shipped window match the one we
     # test. Falls back to nothing if the machine is asleep: the job queues.
+    #
+    # Never for a fork. This repository is public, and a self-hosted runner
+    # executes whatever the workflow says: a pull request from a fork would run
+    # its author's code on someone's actual laptop, with that machine's
+    # keychain, ssh keys and files. GitHub's "first-time contributors" approval
+    # is not a defence, it only asks once. Forks build on a hosted image below,
+    # so an outside contribution still gets full CI.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 20
     steps:
@@ -35,6 +45,27 @@ jobs:
           name: AgentInbox-dmg
           path: mac/build/*.dmg
 
+  # The same checks for a fork's pull request, on a throwaway machine. Slower
+  # and one SDK behind, which is a fair trade for not handing a stranger a shell
+  # on a personal Mac.
+  mac-app-fork:
+    name: Mac app (fork)
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test
+        working-directory: mac
+        run: swift test
+
+      - name: Build
+        working-directory: mac
+        run: ./build.sh
+
   shell:
     name: Shell senders
     runs-on: ubuntu-latest
@@ -53,8 +84,10 @@ jobs:
 
   notify:
     name: Notify on failure
-    needs: [mac-app, shell]
-    if: failure()
+    needs: [mac-app, mac-app-fork, shell]
+    # One of the two mac jobs is always skipped, and a skipped dependency would
+    # skip this too. Ask about actual failures instead.
+    if: ${{ always() && contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
