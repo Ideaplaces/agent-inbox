@@ -178,6 +178,7 @@ struct MenuContentView: View {
                 Image(systemName: "gearshape")
             }
             .buttonStyle(.borderless)
+            .simultaneousGesture(TapGesture().onEnded { SettingsWindowFocus.raise() })
             Button {
                 NSApp.terminate(nil)
             } label: {
