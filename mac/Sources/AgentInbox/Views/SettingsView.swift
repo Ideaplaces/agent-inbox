@@ -89,11 +89,10 @@ struct GeneralSettings: View {
                     Text("Every conversation").tag("all")
                     Text("Only tagged conversations").tag("tagged")
                 }
-                Text(settings.watchMode == "tagged"
-                     ? "Nothing reports until you put a watch tag in the conversation. For when a dozen are open and one matters."
-                     : "Everything reports. Put the mute tag in a conversation to silence that one.")
+                Text(AppSettings.reportModeCaption(watchMode: settings.watchMode))
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 // A TextField's first argument is its label, not a
                 // placeholder. Inside LabeledContent that label is drawn a
@@ -109,6 +108,9 @@ struct GeneralSettings: View {
                         .font(.system(size: 11, design: .monospaced))
                         .onSubmit { settings.watchTags = AppSettings.normalizeTags(settings.watchTags) }
                 }
+                Text(AppSettings.watchTagCaption(watchMode: settings.watchMode))
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
                 LabeledContent("Mute tag") {
                     TextField("", text: $settings.muteTag,
                               prompt: Text(AppSettings.defaultMuteTag))
@@ -117,8 +119,11 @@ struct GeneralSettings: View {
                         .font(.system(size: 11, design: .monospaced))
                         .onSubmit { settings.muteTag = AppSettings.normalizeTags(settings.muteTag) }
                 }
+                Text(AppSettings.muteTagCaption(watchMode: settings.watchMode))
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
                 HStack {
-                    Text("Typed or said anywhere in a message. Separate several with commas, which lets a tag be a phrase like \"watch this\" for dictation. Case does not matter and the most recent tag wins.")
+                    Text("Typed or said anywhere in a message. Separate several with commas, which lets a tag be a phrase like \"watch this\" for dictation. Case does not matter.")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

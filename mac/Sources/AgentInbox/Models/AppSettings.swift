@@ -164,6 +164,35 @@ final class AppSettings {
 
     nonisolated static let publicNtfyServer = "https://ntfy.sh"
 
+    /// What the report mode actually decides, which is narrower than either
+    /// label suggests.
+    ///
+    /// It is the default for a conversation nobody has tagged, and nothing
+    /// more: `notify.sh` records a watch tag as "on" and a mute tag as "off"
+    /// against the session, and only falls back to the mode when neither has
+    /// been seen. Both fields therefore stay live in both modes, so a pane that
+    /// greyed one out would be stating something the sender does not do. What
+    /// changes is which one you reach for, and that is what these say.
+    nonisolated static func reportModeCaption(watchMode: String) -> String {
+        watchMode == "tagged"
+            ? "A conversation you have not tagged stays silent. This is only the default: "
+                + "either tag overrides it, and the most recent one wins."
+            : "A conversation you have not tagged reports. This is only the default: either "
+                + "tag overrides it, and the most recent one wins."
+    }
+
+    nonisolated static func watchTagCaption(watchMode: String) -> String {
+        watchMode == "tagged"
+            ? "The only thing that makes a conversation report."
+            : "Turns a conversation back on after you muted it."
+    }
+
+    nonisolated static func muteTagCaption(watchMode: String) -> String {
+        watchMode == "tagged"
+            ? "Silences a conversation you had tagged to watch."
+            : "Silences one conversation."
+    }
+
     /// What actually protects the messages, which is not the same answer on
     /// every server and is the thing this pane used to get wrong.
     ///

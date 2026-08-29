@@ -185,11 +185,15 @@ it. Without a comma they are separated by whitespace, so `#a #b` still means two
 tags. Emptying the watch tags restores the defaults rather than leaving a silence
 nothing could escape.
 
-**Settings → Conversations → Report** switches the default:
+**Settings → Conversations → Report** switches the default for a conversation you
+have not tagged. That is all it does: both tags stay live in either mode, and a
+tag always beats the default.
 
-- **Every conversation.** Everything reports, and `#mute` silences the noisy one.
-- **Only tagged conversations.** Silence until you tag one. This is the setting
-  for "I have twenty open and want one of them."
+- **Every conversation.** An untagged conversation reports. `#mute` silences one,
+  and a watch tag turns that one back on.
+- **Only tagged conversations.** An untagged conversation stays silent. A watch tag
+  is the only thing that makes one report, and `#mute` silences one you had tagged.
+  This is the setting for "I have twenty open and want one of them."
 
 The mode is per machine, so a dev box can stay quiet while your laptop reports
 everything.
