@@ -170,7 +170,13 @@ struct TransportPicker: View {
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
                 LabeledContent("Server") {
-                    TextField(AppSettings.publicNtfyServer, text: $settings.ntfyServer)
+                    // Hidden, because LabeledContent is already drawing the
+                    // label: a TextField's first argument is its label, not a
+                    // placeholder, so leaving it visible prints the default
+                    // next to the field as if it were a second value.
+                    TextField("", text: $settings.ntfyServer,
+                              prompt: Text(AppSettings.publicNtfyServer))
+                        .labelsHidden()
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 11))
                 }
@@ -180,7 +186,9 @@ struct TransportPicker: View {
                 // invite people to fill in a field that does nothing.
                 if settings.ntfyServer != AppSettings.publicNtfyServer {
                     LabeledContent("Token") {
-                        SecureField("optional", text: $settings.ntfyToken)
+                        SecureField("", text: $settings.ntfyToken,
+                                    prompt: Text("optional"))
+                            .labelsHidden()
                             .textFieldStyle(.roundedBorder)
                             .font(.system(size: 11))
                     }

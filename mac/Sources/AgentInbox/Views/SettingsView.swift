@@ -95,14 +95,24 @@ struct GeneralSettings: View {
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
 
+                // A TextField's first argument is its label, not a
+                // placeholder. Inside LabeledContent that label is drawn a
+                // second time, next to the field, so the pane showed the
+                // default tags beside the tags you had actually typed and read
+                // as the value appearing twice. The defaults belong in the
+                // prompt, which shows only while the field is empty.
                 LabeledContent("Watch tags") {
-                    TextField(AppSettings.defaultWatchTags, text: $settings.watchTags)
+                    TextField("", text: $settings.watchTags,
+                              prompt: Text(AppSettings.defaultWatchTags))
+                        .labelsHidden()
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 11, design: .monospaced))
                         .onSubmit { settings.watchTags = AppSettings.normalizeTags(settings.watchTags) }
                 }
                 LabeledContent("Mute tag") {
-                    TextField(AppSettings.defaultMuteTag, text: $settings.muteTag)
+                    TextField("", text: $settings.muteTag,
+                              prompt: Text(AppSettings.defaultMuteTag))
+                        .labelsHidden()
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 11, design: .monospaced))
                         .onSubmit { settings.muteTag = AppSettings.normalizeTags(settings.muteTag) }
