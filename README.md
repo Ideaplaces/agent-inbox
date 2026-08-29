@@ -100,20 +100,34 @@ Restart any running Claude Code sessions there too.
 **There is nothing to choose and nothing to set up. Skip this section.**
 
 [ntfy.sh](https://ntfy.sh) is a free, open-source pub/sub service. There is no signup, no
-bot and no webhook: a channel is just a topic name. Anyone who knows the topic can read it,
-so the topic is effectively the password, which is why the app generates a long random one
-rather than letting you invent a short one. Keep it private.
+bot and no webhook: a channel is just a topic name.
 
-What ntfy does not give you is history. The public server caches messages for about 12
+That is also the security model, so it is worth being exact about who holds the secret:
+
+| Server | What keeps other people out |
+|---|---|
+| ntfy.sh | The topic name, and nothing else. |
+| Your own, no token | The topic name, and nothing else. |
+| Your own, token set | The token. On a server running `auth-default-access: deny-all`, knowing the topic grants nothing. |
+
+On the first two rows the topic name *is* the password. That is why the app generates
+`agent-inbox-<you>-<24 hex digits>` for you, 96 bits of randomness, instead of letting you
+invent a short one: anyone who learns it reads every message you send and can publish to
+it. Keep it private. The Transport pane says which of the three you are in.
+
+What ntfy.sh does not give you is history. The public server caches messages for about 12
 hours, so the menubar inbox is your record, not the feed.
 
 [Self-hosting ntfy](https://docs.ntfy.sh/install/) changes both of those. Set `NTFY_SERVER`
-to your instance, keep as much history as you want, and if it runs `auth-default-access:
-deny-all`, set a token so the topic name is no longer the only thing protecting your
-messages. The app takes one in **Settings**, or with
+to your instance and keep as much history as you want. If it runs `auth-default-access:
+deny-all`, set a token. The app takes one in **Settings**, or with
 `--configure --transport ntfy --topic <t> --server <url> --token <tk>`. It is stored in the
 Keychain and mirrored to `~/.agent-inbox/ntfy-token` for the bash senders. Leave it empty
 for ntfy.sh, which has no accounts.
+
+Without a token, a self-hosted server that refuses anonymous requests looks like an inbox
+that simply never fills. Nothing arrives, and the status in the Transport pane turns red
+with the HTTP code after two failed polls.
 
 
 

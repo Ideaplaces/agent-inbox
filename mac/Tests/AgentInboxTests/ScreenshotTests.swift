@@ -102,6 +102,15 @@ final class ScreenshotTests: XCTestCase {
         let model = AppModel()
         model.settings.transport = .ntfy
         model.settings.ntfyTopic = "agent-inbox-you-2f8a1c94b7e0"
+        // Pin the server, or the Transport pane draws whatever this machine
+        // last left in the test process's defaults. It already committed a
+        // stray "DIAGNOSTIC.example.com" into docs/ once. On ntfy.sh the token
+        // row is not rendered at all, which also keeps the developer's real
+        // token out of a public screenshot: AppSettings reads it from the login
+        // keychain, which the test process shares with the installed app.
+        // Never assign ntfyToken here. Its setter writes through to that same
+        // keychain item, so a screenshot run would delete the real one.
+        model.settings.ntfyServer = AppSettings.publicNtfyServer
         if !items.isEmpty { model.store.add(items) }
         return model
     }

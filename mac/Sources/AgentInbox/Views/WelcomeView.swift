@@ -148,7 +148,7 @@ struct TransportPicker: View {
         @Bindable var settings = model.settings
 
         VStack(alignment: .leading, spacing: 10) {
-            Text("No account, no bot, nothing to provision. A topic name is the whole channel, and one has already been generated for you.")
+            Text(AppSettings.transportIntro(server: settings.ntfyServer))
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -165,7 +165,8 @@ struct TransportPicker: View {
                     }
                     .controlSize(.small)
                 }
-                Text("The topic name is the whole secret: anyone who knows it can read your messages. Generate a long one and keep it private.")
+                Text(AppSettings.topicExplanation(
+                    server: settings.ntfyServer, token: settings.ntfyToken))
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)

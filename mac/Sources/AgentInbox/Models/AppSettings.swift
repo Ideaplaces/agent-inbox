@@ -164,6 +164,61 @@ final class AppSettings {
 
     nonisolated static let publicNtfyServer = "https://ntfy.sh"
 
+    /// What actually protects the messages, which is not the same answer on
+    /// every server and is the thing this pane used to get wrong.
+    ///
+    /// On ntfy.sh a topic needs no account: the name *is* the channel, so the
+    /// name is also the password. A self-hosted server can require a token, and
+    /// once one is set the server decides who gets in and the topic is only a
+    /// name. Reached without a token, a self-hosted server is back to the first
+    /// case.
+    enum AccessModel {
+        case topicIsTheSecret
+        case tokenIsTheSecret
+    }
+
+    nonisolated static func accessModel(server: String, token: String) -> AccessModel {
+        // The token field is hidden while the server is ntfy.sh, so a value
+        // left behind by a previous server must not change what is claimed
+        // here. Emptiness is tested the way NtfyTransport tests it, so the pane
+        // and the request agree on whether a token is being sent.
+        guard server != publicNtfyServer, !token.isEmpty else { return .topicIsTheSecret }
+        return .tokenIsTheSecret
+    }
+
+    /// The sentence under the topic field. Three states, because "keep the
+    /// topic secret" is wrong advice on a server that authenticates and
+    /// useless advice on one that then refuses you.
+    nonisolated static func topicExplanation(server: String, token: String) -> String {
+        switch accessModel(server: server, token: token) {
+        case .tokenIsTheSecret:
+            return "The token is the secret here, not the topic. The server checks it on every "
+                + "read and every publish, so where it denies anonymous access the topic name "
+                + "grants nothing on its own. It is kept in the Keychain, and mirrored to "
+                + "~/.agent-inbox/ntfy-token so the senders on this Mac can read it."
+        case .topicIsTheSecret where server != publicNtfyServer:
+            return "No token, so this server is being asked anonymously and the topic name is "
+                + "still the whole secret. If the server does not allow anonymous access, "
+                + "nothing arrives: the status below turns red with the HTTP code after two "
+                + "failed polls."
+        case .topicIsTheSecret:
+            return "The topic name is the whole secret. ntfy.sh puts no gate in front of it, so "
+                + "anyone who learns the name reads every message and can publish to it. That "
+                + "is why the generated one carries 96 bits of randomness instead of a name you "
+                + "would choose. Keep it private."
+        }
+    }
+
+    /// The line above the topic field. "Nothing to provision" is true of
+    /// ntfy.sh and is the first thing a self-hosted server contradicts.
+    nonisolated static func transportIntro(server: String) -> String {
+        server == publicNtfyServer
+            ? "No account, no bot, nothing to provision. A topic name is the whole channel, "
+                + "and one has already been generated for you."
+            : "Pointing at your own ntfy. The topic still names the channel; what that server "
+                + "requires is what decides who can reach it."
+    }
+
     nonisolated static func randomNtfyTopic() -> String {
         let user = NSUserName().lowercased().filter { $0.isLetter || $0.isNumber }
         var bytes = [UInt8](repeating: 0, count: 12)
