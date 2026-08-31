@@ -445,5 +445,116 @@ fi
 
 rm -f "$CT" "$TR"
 
+# --- the closing words: how the turn ended, not how it started ---
+#
+# The row named the repo and the subject, which is not enough to recognise a
+# conversation you left two days and several hundred thousand tokens ago. The
+# last message was already on the wire, but as its first 600 characters: the
+# wrong end, cut mid-word, and the app never drew it at all.
+CW="$(mktemp)"
+sed -n '/^last_assistant_text()/,/^}/p' "$HERE/notify.sh" > "$CW"
+sed -n '/^closing_words()/,/^}/p' "$HERE/notify.sh" >> "$CW"
+
+AT="$(mktemp)"
+say() { # the agent's last message, as a transcript
+  printf '{"type":"assistant","message":{"content":[{"type":"text","text":%s}]}}\n' \
+    "$(printf '%s' "$1" | jq -Rs .)" > "$AT"
+}
+closing() { bash -c "source $CW; TRANSCRIPT=$AT closing_words ${1:-}"; }
+
+say 'The migration is deployed and the backfill finished cleanly. It took two passes because the first one timed out on the orders table. Nothing else is outstanding on this one.'
+got="$(closing)"
+case "$got" in
+  "The migration is deployed and the backfill finished cleanly. … Nothing else is outstanding on this one.")
+    ok "the first and last sentence, joined by an ellipsis";;
+  *) fail "the first and last sentence, joined by an ellipsis" "got: [$got]";;
+esac
+
+# "Done." as an opening sentence says nothing the checkmark had not.
+say 'Done. The runner is back up and all eleven services report active. Say the word if you want the snapshot too.'
+got="$(closing)"
+case "$got" in
+  "Done. The runner is back up"*) ok "a short opening fragment joins the sentence after it";;
+  *) fail "a short opening fragment joins the sentence after it" "got: [$got]";;
+esac
+
+# A closing line of `};` identifies nothing, so code is not prose.
+say 'Here is the patch.
+```
+function foo() {
+  return 1;
+}
+```
+That is the whole change, and the tests pass.'
+got="$(closing)"
+case "$got" in
+  *"return 1"*) fail "fenced code is not treated as prose" "got: [$got]";;
+  *"That is the whole change, and the tests pass.") ok "fenced code is not treated as prose";;
+  *) fail "fenced code is not treated as prose" "got: [$got]";;
+esac
+
+# One sentence is one sentence, not the same sentence twice.
+say 'The branch is pushed and CI is green on it.'
+got="$(closing)"
+[ "$got" = "The branch is pushed and CI is green on it." ] \
+  && ok "a one-sentence message is printed once, with no ellipsis" \
+  || fail "a one-sentence message is printed once, with no ellipsis" "got: [$got]"
+
+# Cutting a sentence can orphan a ** or a backtick, which the menu would draw
+# as a literal marker rather than as bold.
+say '**The deploy is out and verified across every region we run in, with the health checks passing on all of them and nothing left outstanding.** And that is that, so we are finished here.'
+got="$(closing 40)"
+case "$got" in
+  *'**'*) fail "an unpaired bold marker is dropped rather than shown" "got: [$got]";;
+  *) ok "an unpaired bold marker is dropped rather than shown";;
+esac
+
+# A turn that ends in a code block has no prose to reduce, and must still say
+# something rather than sending an empty line.
+say '```
+git push origin main
+```'
+new_home
+out="$(run stop "$(printf '{"session_id":"z","cwd":"/tmp/repo","transcript_path":"%s"}' "$AT")")"
+case "$out" in
+  *"git push origin main"*) ok "a turn with no prose falls back to the message itself";;
+  *) fail "a turn with no prose falls back to the message itself" "got: $out";;
+esac
+
+# The regression that cost an afternoon: "$BODY💬" is not $BODY followed by an
+# emoji. Bash takes the emoji's bytes as part of the variable name, the whole
+# expansion comes back empty, and the subject and the ask above it vanish.
+cat > "$AT" <<'TRANSCRIPT'
+{"type":"ai-title","aiTitle":"The menubar padding"}
+{"type":"user","message":{"content":[{"type":"text","text":"why is the menu floating below the bar"}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"It is the SDK the binary was built against, not the padding. Rebuilt on the macOS 26 SDK and the window shrinks correctly now."}]}}
+TRANSCRIPT
+new_home
+out="$(run stop "$(printf '{"session_id":"z","cwd":"/tmp/repo","transcript_path":"%s"}' "$AT")")"
+case "$out" in
+  *"💬 It is the SDK the binary was built against"*)
+    ok "a finished turn carries the closing words";;
+  *) fail "a finished turn carries the closing words" "got: $out";;
+esac
+case "$out" in
+  *"🧵 The menubar padding"*) ok "and the subject line above them survives";;
+  *) fail "and the subject line above them survives" "got: $out";;
+esac
+case "$out" in
+  *"the window shrinks correctly now."*) ok "and the closing words end at the last sentence";;
+  *) fail "and the closing words end at the last sentence" "got: $out";;
+esac
+
+# The hand's line is the same reduction. A question lives in the final line, so
+# showing the head of the message was showing the wrong end.
+new_home
+out="$(run notification "$(printf '{"session_id":"z","cwd":"/tmp/repo","transcript_path":"%s","message":"Claude needs your permission to use Bash"}' "$AT")")"
+case "$out" in
+  *"❯ It is the SDK"*" … "*) ok "the hand carries the same first-and-last reduction";;
+  *) fail "the hand carries the same first-and-last reduction" "got: $out";;
+esac
+
+rm -f "$CW" "$AT"
+
 echo
 echo "$PASS checks passed"

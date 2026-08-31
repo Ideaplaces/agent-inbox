@@ -241,6 +241,13 @@ private struct ItemRow: View {
                         .lineLimit(4)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                if let closing = item.closingWords {
+                    Text(MarkdownText.attributed(closing))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.primary.opacity(0.75))
+                        .lineLimit(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if let waiting = item.waitingOn {
                     Text(MarkdownText.attributed(waiting))
                         .font(.system(size: 12))

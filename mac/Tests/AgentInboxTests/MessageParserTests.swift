@@ -70,6 +70,7 @@ final class MessageParserTests: XCTestCase {
             body: """
             🧵 Refactor the checkout flow to use the new payments SDK
             🗣 ok now handle the refund path too
+            💬 Refunds are wired up end to end. … Want me to run it against staging?
             Claude needs your permission to use Bash
             ❯ Should I run the migration against staging first?
             """,
@@ -83,6 +84,8 @@ final class MessageParserTests: XCTestCase {
         XCTAssertEqual(item.summary, "Refactor the checkout flow to use the new payments SDK")
         XCTAssertEqual(item.ask, "ok now handle the refund path too")
         XCTAssertEqual(item.detail, "Claude needs your permission to use Bash")
+        XCTAssertEqual(
+            item.closing, "Refunds are wired up end to end. … Want me to run it against staging?")
         XCTAssertEqual(item.waitingOn, "Should I run the migration against staging first?")
         XCTAssertEqual(item.cwd, "/home/me/checkout")
         XCTAssertEqual(item.presenceAtArrival, 120)
@@ -121,10 +124,12 @@ final class MessageParserTests: XCTestCase {
 /// carries both, so the subject was invisible in the menu even once the sender
 /// was fixed to send it.
 final class ItemThreadTests: XCTestCase {
-    private func item(summary: String?, ask: String?, detail: String? = nil) -> InboxItem {
+    private func item(
+        summary: String?, ask: String?, detail: String? = nil, closing: String? = nil
+    ) -> InboxItem {
         InboxItem(
             id: "1", kind: .needsYou, repo: "r", host: "h", duration: nil,
-            summary: summary, ask: ask, detail: detail, waitingOn: nil,
+            summary: summary, ask: ask, detail: detail, closing: closing, waitingOn: nil,
             sessionID: nil, cwd: nil, receivedAt: Date(), presenceAtArrival: 0)
     }
 
@@ -145,5 +150,30 @@ final class ItemThreadTests: XCTestCase {
     func testAnItemWithNoSubjectHasNoThreadLine() {
         XCTAssertNil(item(summary: nil, ask: "just this").thread)
         XCTAssertNil(item(summary: "", ask: "just this").thread)
+    }
+
+    /// The whole point of the closing line: a finished item always has a
+    /// subject and an ask, so anything folded into `subtitle`'s fallback chain
+    /// is never drawn. It has to be its own line or it does not exist.
+    func testTheClosingWordsSurviveASubjectAndAnAsk() {
+        let row = item(
+            summary: "NPS analysis", ask: "push it to main",
+            closing: "Pushed to main. … CI is green.")
+        XCTAssertEqual(row.thread, "NPS analysis")
+        XCTAssertEqual(row.subtitle, "push it to main")
+        XCTAssertEqual(row.closingWords, "Pushed to main. … CI is green.")
+    }
+
+    /// An older sender sends no 💬 line at all, and its items must render
+    /// exactly as they did before.
+    func testAnItemFromAnOlderSenderHasNoClosingLine() {
+        let row = item(summary: "NPS analysis", ask: "push it to main", detail: "some head text")
+        XCTAssertNil(row.closingWords)
+        XCTAssertEqual(row.subtitle, "push it to main")
+    }
+
+    func testAClosingThatOnlyRepeatsTheLineAboveIsDropped() {
+        XCTAssertNil(item(summary: nil, ask: "push it", closing: "push it").closingWords)
+        XCTAssertNil(item(summary: "s", ask: "a", closing: "").closingWords)
     }
 }

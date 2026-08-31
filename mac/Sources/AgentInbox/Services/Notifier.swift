@@ -27,6 +27,7 @@ enum Notifier {
         if let summary = item.summary { lines.append(summary) }
         if let ask = item.ask { lines.append("🗣 \(ask)") }
         if let detail = item.detail { lines.append(detail) }
+        if let closing = item.closingWords { lines.append(closing) }
         if let waiting = item.waitingOn { lines.append("❯ \(waiting)") }
         // A banner is plain text, so markers would show as literal ** and `.
         content.body = MarkdownText.plain(lines.joined(separator: "\n"))

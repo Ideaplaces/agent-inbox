@@ -7,9 +7,10 @@ box, the bottleneck isn't the agents. It's remembering who finished what, and wh
 blocked on a permission prompt. Agent Inbox turns that around: sessions interrupt *you*.
 
 - 🖐️ **Needs you.** An agent hit a permission prompt, or ended its turn on a question.
-- ✅ **Finished.** A turn completed, with how long it took and the agent's closing words.
-- 🧵 **Context on every message.** What the conversation is about and what you last asked,
-  so a ping from a two-day-old session still rings the right bell.
+- ✅ **Finished.** A turn completed, with how long it took and how it ended: the first
+  sentence of the agent's answer and the last one.
+- 🧵 **Context on every message.** What the conversation is about, what you last asked, and
+  what the agent said back, so a ping from a two-day-old session still rings the right bell.
 - **One row per conversation.** A newer message retires the older ones from the same
   session, so the list says where each conversation is rather than every step it took.
 - **Typing clears it.** Start writing in a conversation and its row goes on its own. You
@@ -138,15 +139,24 @@ with the HTTP code after two failed polls.
 🧵 Refactor the checkout flow to use the new payments SDK   <- conversation summary
 🗣 ok now handle the refund path too                        <- your latest message
 Claude needs your permission to use Bash                    <- why it pinged
-❯ Should I run the migration against staging first?         <- what it's waiting on
+❯ Refunds are wired up. … Should I run the migration        <- how it ended
+   against staging first?
 ```
+
+**The last line is the agent's own words, reduced to two sentences: the one that opened
+its answer and the one that closed it,** joined by an ellipsis. A ✅ carries the same thing
+under a 💬. It is there because a subject line stops being enough to recognise a
+conversation you left two days and several hundred thousand tokens ago, and because the
+part worth reading is usually the end, which is exactly what a truncated message loses.
+Fenced code, tables and list markers are skipped, since a closing line of `};` identifies
+nothing.
 
 Three hooks produce these:
 
 | Hook event | Meaning | What you get |
 |------------|---------|--------------|
 | `UserPromptSubmit` | You handed work to the agent | Nothing. It just records a start time |
-| `Stop` | The agent finished its turn | **✅** with the duration and its closing words. Turns shorter than `MIN_SECONDS` (45s by default) are dropped, so quick back-and-forth doesn't spam you |
+| `Stop` | The agent finished its turn | **✅** with the duration and its closing words, the first and last sentence of what it said. Turns shorter than `MIN_SECONDS` (45s by default) are dropped, so quick back-and-forth doesn't spam you |
 | `Notification` | The agent needs permission, or has gone idle | **🖐️** with the reason and what it just asked. A permission prompt always reports. The idle timer fires 60s after *every* turn, so it only reports when the agent's closing line was a question; otherwise the ✅ already said it |
 
 **Clicking an item clears it.** There is deliberately no jump-to-session: a notification

@@ -35,6 +35,8 @@ enum ItemKind: String, Codable {
 ///     🖐️ my-app @ devbox                     <- title
 ///     🧵 Refactor the checkout flow          <- summary
 ///     🗣 ok now handle the refund path       <- ask
+///     💬 Refunds are wired up. … Want me to  <- closing
+///        run it against staging?
 ///     Claude needs your permission to ...    <- detail
 ///     ❯ Should I run the migration first?    <- waitingOn
 ///     session a1b2c3d4 · /Users/me/my-app    <- footer
@@ -47,6 +49,12 @@ struct InboxItem: Codable, Identifiable, Equatable {
     var summary: String?
     var ask: String?
     var detail: String?
+    /// How the agent's last message opened and how it closed, already reduced
+    /// to two sentences by the sender.
+    ///
+    /// Optional because an older sender does not send it, in which case the
+    /// row falls back to `detail` exactly as it used to.
+    var closing: String?
     var waitingOn: String?
     var sessionID: String?
     var cwd: String?
@@ -77,6 +85,18 @@ struct InboxItem: Codable, Identifiable, Equatable {
     /// The one line worth showing under the title when space is tight.
     var subtitle: String? {
         ask ?? summary ?? detail
+    }
+
+    /// The agent's own words, shown under everything else.
+    ///
+    /// Kept out of `subtitle`'s fallback chain on purpose. The chain answers
+    /// "what is this conversation", and every finished item already has an
+    /// answer to that, so a closing folded into it would never once be drawn.
+    /// This is the line that tells two long sessions apart, which is exactly
+    /// the case where the subject line has stopped being enough.
+    var closingWords: String? {
+        guard let closing, !closing.isEmpty, closing != subtitle else { return nil }
+        return closing
     }
 }
 
@@ -133,6 +153,7 @@ enum MessageParser {
 
         var summary: String?
         var ask: String?
+        var closing: String?
         var waitingOn: String?
         var detailLines: [String] = []
 
@@ -143,6 +164,8 @@ enum MessageParser {
                 summary = String(line.dropFirst(1)).trimmingCharacters(in: .whitespaces)
             } else if line.hasPrefix("🗣") {
                 ask = String(line.dropFirst(1)).trimmingCharacters(in: .whitespaces)
+            } else if line.hasPrefix("💬") {
+                closing = String(line.dropFirst(1)).trimmingCharacters(in: .whitespaces)
             } else if line.hasPrefix("❯") {
                 waitingOn = String(line.dropFirst(1)).trimmingCharacters(in: .whitespaces)
             } else {
@@ -159,6 +182,7 @@ enum MessageParser {
             summary: summary,
             ask: ask,
             detail: detailLines.isEmpty ? nil : detailLines.joined(separator: "\n"),
+            closing: closing,
             waitingOn: waitingOn,
             sessionID: foot.session,
             cwd: foot.cwd,

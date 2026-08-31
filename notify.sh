@@ -131,6 +131,95 @@ last_assistant_text() { # $1 max chars
   tail -n 300 "$TRANSCRIPT" | jq -Rrs '[split("\n")[] | fromjson? | select(.type=="assistant") | .message.content | if type=="array" then ([.[] | select(.type=="text") | .text] | join("\n")) else tostring end | select(length>0)] | last // ""' 2>/dev/null | head -c "$1"
 }
 
+# The agent's closing words: the first sentence of its last message and the
+# last one, joined by an ellipsis.
+#
+# A row that names the repo and the subject is not enough to recognise a
+# conversation you left two days and several hundred thousand tokens ago, and
+# the head of the last message is the wrong 600 characters: it truncates
+# mid-word, long before the part that says how the turn ended. The two
+# sentences that carry the most are the one that opens the answer and the one
+# that closes it.
+#
+# Prose only. Fenced code, tables, rules and list markers are dropped, since a
+# closing line of `};` identifies nothing. Line ends count as sentence ends,
+# because an agent writes in short lines, headings and bullets that often carry
+# no full stop at all.
+closing_words() { # $1 = max chars per sentence, default 160
+  last_assistant_text 8000 | awk -v max="${1:-160}" '
+    function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
+
+    # A full stop that ends one of these ends a word, not a sentence.
+    function is_abbrev(w) {
+      return (w ~ /^([A-Za-z]|[Ee]\.g|[Ii]\.e|vs|etc|approx|no|No|Mr|Mrs|Ms|Dr|Inc|Ltd|Fig|al)$/)
+    }
+
+    # Cutting anywhere can leave an opening ** or ` with no partner, which the
+    # menu would draw as a literal marker. Drop an unpaired one.
+    function balance(s,   n) {
+      n = gsub(/\*\*/, "&", s); if (n % 2) gsub(/\*\*/, "", s)
+      n = gsub(/`/, "&", s);     if (n % 2) gsub(/`/, "", s)
+      return s
+    }
+
+    # Cut at a word boundary, so the ellipsis reads as elision and not damage.
+    function clip(s,   cut) {
+      if (length(s) <= max) return balance(s)
+      cut = substr(s, 1, max)
+      if (match(cut, /^.*[ ]/)) cut = substr(cut, 1, RLENGTH - 1)
+      return balance(trim(cut)) "…"
+    }
+
+    # A fragment under 25 characters is held and joined to the sentence that
+    # follows it, rather than standing as one: an opening sentence of "Done."
+    # says nothing the checkmark had not already said, and a heading is a
+    # fragment of the paragraph under it.
+    function keep(s) {
+      s = trim(s)
+      if (s == "") return
+      if (held != "") s = held " " s
+      if (length(s) < 25) { held = s; return }
+      S[++N] = s; held = ""
+    }
+
+    function sentences(text,   i, len, ch, nxt, cur, word) {
+      cur = ""; len = length(text)
+      for (i = 1; i <= len; i++) {
+        ch = substr(text, i, 1)
+        cur = cur ch
+        if (ch != "." && ch != "!" && ch != "?") continue
+        nxt = substr(text, i + 1, 1)
+        if (nxt != "" && nxt != " ") continue
+        word = cur; sub(/[.!?]+$/, "", word); sub(/^.*[ ]/, "", word)
+        if (is_abbrev(word)) continue
+        keep(cur); cur = ""
+      }
+      keep(cur)
+    }
+
+    BEGIN { fence = 0; N = 0; held = "" }
+    /^[ \t]*(```|~~~)/ { fence = 1 - fence; next }
+    fence { next }
+    {
+      line = trim($0)
+      sub(/^[>#]+[ \t]*/, "", line)               # quotes and headings
+      sub(/^([-*+]|[0-9]+[.)])[ \t]+/, "", line)  # list markers
+      line = trim(line)
+      if (line == "") next
+      if (line ~ /^[|]/) next                     # table rows
+      if (line ~ /^([-*_=][ \t]*)+$/) next        # rules
+      sentences(line)
+    }
+
+    END {
+      if (held != "") { if (N > 0) S[N] = S[N] " " held; else S[++N] = held }
+      if (N == 0) exit
+      if (N == 1) { print clip(S[1]); exit }
+      print clip(S[1]) " … " clip(S[N])
+    }
+  '
+}
+
 # Extract real user-message texts from transcript lines on stdin, skipping
 # system wrappers (<local-command-caveat>, <command-name>) and tool-result
 # entries that also arrive with type=="user". $1 = "first" or "last".
@@ -248,16 +337,25 @@ case "$KIND" in
     else
       DURATION="unknown"
     fi
-    SNIPPET="$(last_assistant_text 600)"
+    # How the turn ended, which is what tells two long sessions apart. Falls
+    # back to the head of the last message when there is no prose to reduce,
+    # so a turn that ended in a code block still says something.
+    CLOSING="$(closing_words)"
+    SNIPPET=""
+    [ -z "$CLOSING" ] && SNIPPET="$(last_assistant_text 600)"
     CONTEXT="$(session_context)"
-    [ -n "$CONTEXT" ] && SNIPPET="$CONTEXT
-$SNIPPET"
     if [ "$DURATION" = "unknown" ]; then
       TITLE="✅ $REPO @ $HOST_LABEL"
     else
       TITLE="✅ $REPO @ $HOST_LABEL ($DURATION)"
     fi
-    BODY="$SNIPPET"
+    BODY=""
+    [ -n "$CONTEXT" ] && BODY="$CONTEXT
+"
+    # Braced, because bash takes the emoji's bytes as part of the name and
+    # "$BODY💬" silently expands to nothing, dropping the context above it.
+    [ -n "$CLOSING" ] && BODY="${BODY}💬 $CLOSING"
+    [ -n "$SNIPPET" ] && BODY="${BODY}$SNIPPET"
     FOOTER="session ${SESSION_ID:0:8} · $CWD"
     ;;
 
@@ -274,7 +372,11 @@ $SNIPPET"
     TITLE="🖐️ $REPO @ $HOST_LABEL"
     # Lead with what the chat is about, then what Claude is waiting on.
     CONTEXT="$(session_context)"
-    LAST="$(last_assistant_text 400)"
+    # The same first-and-last reduction the ✅ carries. The head of the message
+    # was the wrong end to show here: an agent that stops on a question puts it
+    # in the final line, past where 400 characters cut.
+    LAST="$(closing_words)"
+    [ -z "$LAST" ] && LAST="$(last_assistant_text 400)"
     BODY=""
     [ -n "$CONTEXT" ] && BODY="$CONTEXT
 "

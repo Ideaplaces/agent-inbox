@@ -124,7 +124,8 @@ final class ScreenshotTests: XCTestCase {
                 duration: "4m 12s",
                 summary: "Rewrite the pricing page copy",
                 ask: "make the middle tier the obvious pick",
-                detail: "Pricing page rewritten, and the comparison table now marks the middle tier as recommended.",
+                detail: nil,
+                closing: "Pricing page rewritten, and the comparison table now marks the middle tier as recommended. … Left the annual toggle alone, since you did not ask for it.",
                 waitingOn: nil, sessionID: "e5f6a7b8", cwd: "/Users/you/marketing-site",
                 receivedAt: Date(timeIntervalSince1970: 1_700_000_600), presenceAtArrival: 0),
             InboxItem(
@@ -133,7 +134,8 @@ final class ScreenshotTests: XCTestCase {
                 summary: "Refactor the checkout flow onto the new payments SDK",
                 ask: "ok now handle the refund path too",
                 detail: "Claude needs your permission to use Bash",
-                waitingOn: "Should I run the migration against staging first?",
+                closing: nil,
+                waitingOn: "The refund path is wired up and tested. … Should I run the migration against staging first?",
                 sessionID: "a1b2c3d4", cwd: "/srv/checkout-api",
                 receivedAt: Date(timeIntervalSince1970: 1_700_000_000), presenceAtArrival: 0),
         ]
