@@ -87,6 +87,22 @@ docs.ideaplaces.com/devops/macos-app-signing.
   GUI, and `makehybrid` does carry dotfiles into the image. Re-run it only when
   the layout changes, and note that the names in it must match the staged files
   exactly or Finder silently falls back to automatic positions.
+- **Finder drops a view-options dictionary it does not recognise, whole.** The
+  0.1.24 image asked for 128pt icons and got Finder's default 64: the window
+  settings in `bwsp` applied while every setting in `icvp` was discarded, with
+  no error and nothing in a log. The file carried two keys Finder never writes
+  (`scrollPositionX`/`scrollPositionY`, plus a stray `ICVO`) and was missing
+  three it always writes (`backgroundColorRed`/`Green`/`Blue`). Match the key
+  set of a `.DS_Store` Finder itself produced, which means pulling one out of a
+  shipping DMG and diffing against it.
+- **The background picture needs the `pBBk` bookmark, not only the alias.**
+  `backgroundImageAlias` inside `icvp` is the older half and Finder does not
+  resolve it on its own. Both are written now.
+- **AppleScript cannot tell you whether the background applied.** `background
+  picture of icon view options` reports `NONE` for images that certainly have
+  one, checked against a third-party DMG as a control before trusting the
+  reading. `icon size` and the window bounds do read back correctly, so verify
+  what can be verified and have a person look at the rest.
 - **Test the binary you think you are testing.** A `--configure` flag appeared to
   hang through several rounds of debugging because `/Applications` held the
   released build, which predated the flag.

@@ -67,10 +67,16 @@ ln -s /Applications "$STAGE/Applications"
 # needs no mount and no GUI. `makehybrid` carries dotfiles into the image, so
 # copying it in is all that is left to do.
 cp dmg/DS_Store "$STAGE/.DS_Store"
+mkdir -p "$STAGE/.background"
+cp dmg/background.png "$STAGE/.background/background.png"
 # Loudly, because the failure is otherwise invisible: the image still builds,
 # still installs and still works, and the only symptom is a window that looks
-# like it did before anyone bothered.
-[ -f "$STAGE/.DS_Store" ] || { echo "the DMG layout did not stage" >&2; exit 1; }
+# like it did before anyone bothered. The picture matters as much as the
+# layout: the .DS_Store names it by alias, and an alias to a file that is not
+# there leaves Finder drawing a plain window with no error anywhere.
+for f in "$STAGE/.DS_Store" "$STAGE/.background/background.png"; do
+  [ -f "$f" ] || { echo "the DMG layout did not stage: $f" >&2; exit 1; }
+done
 
 # `makehybrid` builds the filesystem directly from a folder, with no mount
 # step. `hdiutil create -srcfolder` needs one, and managed Macs and CI runners
