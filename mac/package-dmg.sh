@@ -57,6 +57,20 @@ rm -rf "$STAGE" "$DMG" build/hybrid.dmg
 mkdir -p "$STAGE"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
+# The window: size, icon size and where the two icons sit. Without it Finder
+# opens the image at whatever it last used, which is a small window with small
+# icons and no hint that one is meant to be dragged onto the other.
+#
+# Committed rather than arranged at build time. Making one the usual way means
+# mounting the image read-write and driving Finder over AppleScript, which is
+# exactly what this script avoids; dmg/make-ds-store.py writes it directly and
+# needs no mount and no GUI. `makehybrid` carries dotfiles into the image, so
+# copying it in is all that is left to do.
+cp dmg/DS_Store "$STAGE/.DS_Store"
+# Loudly, because the failure is otherwise invisible: the image still builds,
+# still installs and still works, and the only symptom is a window that looks
+# like it did before anyone bothered.
+[ -f "$STAGE/.DS_Store" ] || { echo "the DMG layout did not stage" >&2; exit 1; }
 
 # `makehybrid` builds the filesystem directly from a folder, with no mount
 # step. `hdiutil create -srcfolder` needs one, and managed Macs and CI runners

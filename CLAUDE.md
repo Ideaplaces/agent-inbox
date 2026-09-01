@@ -78,6 +78,15 @@ docs.ideaplaces.com/devops/macos-app-signing.
   posts to whatever it finds in `~/.agent-inbox/`, so switching the app from
   Discord to ntfy left every session publishing to both for days with nothing
   to show it. The writer now retires the other transport's files.
+- **The DMG window comes from a committed `.DS_Store`.** Without one, Finder
+  opens the image at whatever size and icon scale it last used, which is the
+  cramped default window. The usual way to make one is to mount the image
+  read-write and drive Finder over AppleScript, and this project cannot: that
+  is the same read-only-mount problem that made `create -srcfolder` unusable.
+  `mac/dmg/make-ds-store.py` writes the file directly, with no mount and no
+  GUI, and `makehybrid` does carry dotfiles into the image. Re-run it only when
+  the layout changes, and note that the names in it must match the staged files
+  exactly or Finder silently falls back to automatic positions.
 - **Test the binary you think you are testing.** A `--configure` flag appeared to
   hang through several rounds of debugging because `/Applications` held the
   released build, which predated the flag.
