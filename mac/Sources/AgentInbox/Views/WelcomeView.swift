@@ -75,6 +75,7 @@ struct WelcomeView: View {
                         .onChange(of: launchAtLogin) { _, value in
                             try? LoginItem.set(value)
                             launchAtLogin = LoginItem.isEnabled
+                            model.settings.hasDecidedLoginItem = true
                         }
                 }
 

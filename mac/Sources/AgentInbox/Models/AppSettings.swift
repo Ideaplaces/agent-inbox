@@ -90,6 +90,15 @@ final class AppSettings {
     var hasCompletedOnboarding: Bool {
         didSet { defaults.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding") }
     }
+    /// Whether anyone has yet said whether this app opens at login.
+    ///
+    /// First launch turns it on for you, so the answer to "why did it stop
+    /// notifying me" is never "it was not running". That is a default, not a
+    /// policy: the moment a person or a script decides either way, the
+    /// decision is recorded here and no later launch overrides it.
+    var hasDecidedLoginItem: Bool {
+        didSet { defaults.set(hasDecidedLoginItem, forKey: "hasDecidedLoginItem") }
+    }
 
     private init() {
         defaults.register(defaults: [
@@ -120,6 +129,7 @@ final class AppSettings {
         muteTag = defaults.string(forKey: "muteTag") ?? AppSettings.defaultMuteTag
         hostLabel = defaults.string(forKey: "hostLabel") ?? Host.current().localizedName ?? "mac"
         hasCompletedOnboarding = defaults.bool(forKey: "hasCompletedOnboarding")
+        hasDecidedLoginItem = defaults.bool(forKey: "hasDecidedLoginItem")
     }
 
     // Spoken forms ship alongside the typed ones because dictation cannot

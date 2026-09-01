@@ -109,6 +109,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             let enable = arguments.contains("--register-login-item")
             do {
                 try LoginItem.set(enable)
+                // A script saying either way is a decision, so the next launch
+                // does not quietly re-enable what it just turned off.
+                MainActor.assumeIsolated { AppSettings.shared.hasDecidedLoginItem = true }
+                UserDefaults.standard.synchronize()
                 print("login item \(enable ? "registered" : "unregistered")")
                 exit(0)
             } catch {
@@ -177,6 +181,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         Notifier.registerCategories()
         Task { @MainActor in
             AppModel.shared.start()
+            // Before anything else it might ask for: an inbox that is not
+            // running has nothing to notify you about.
+            LoginItem.enableOnFirstLaunch()
             _ = await Notifier.requestAuthorization()
             // A menubar app is easy to miss on first launch, so show the
             // setup window until it has been completed once.

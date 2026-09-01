@@ -34,6 +34,7 @@ struct GeneralSettings: View {
                     .onChange(of: launchAtLogin) { _, value in
                         try? LoginItem.set(value)
                         launchAtLogin = LoginItem.isEnabled
+                        model.settings.hasDecidedLoginItem = true
                     }
                 Picker("Sound", selection: $settings.soundName) {
                     ForEach(Self.sounds, id: \.self) { name in

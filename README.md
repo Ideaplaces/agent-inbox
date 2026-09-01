@@ -41,28 +41,25 @@ You need Claude Code already working, and macOS 14 or newer for the app.
 
 ### 1. Your Mac
 
+Pick either one. There is no difference in what you end up with.
+
+**With Homebrew:**
+
 ```bash
 brew install --cask ideaplaces/tap/agent-inbox
 ```
 
-Or do the whole thing, install and configure and hooks and login item, in one command:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Ideaplaces/agent-inbox/main/setup-mac.sh \
-  | bash -s -- --ntfy <topic>
-```
-
-That drives the same code the setup window does, through the app's CLI flags, so a new
-machine needs no clicking. It falls back to downloading the release DMG when Homebrew is
-not installed. Teams on Azure Key Vault can use `--keyvault <name>` instead and skip
-handling secrets entirely.
-
-Or download the latest `.dmg` from
+**Without it,** download the latest `.dmg` from
 [Releases](https://github.com/Ideaplaces/agent-inbox/releases) and drag it to Applications.
-Either way it is signed and notarized, so it opens without a Gatekeeper warning and updates
-itself from then on.
+It is signed and notarized, so it opens with no Gatekeeper warning and updates itself from
+then on.
 
-Open it. A setup window appears and does three things:
+Either way the app opens itself and **puts itself in Login Items**, because a menubar app
+that is not running is not an inbox. You never have to remember to start it, and it is
+back after a reboot. Turn that off in **Settings → General** whenever you like and it stays
+off; it is a default, not a policy.
+
+A setup window appears and does three things:
 
 1. **Picks a transport.** It defaults to ntfy and generates a private topic for you, so
    there is nothing to decide or sign up for.
@@ -73,6 +70,18 @@ Open it. A setup window appears and does three things:
 Then restart any Claude Code sessions that were already running, so they pick up the hooks.
 
 That is the whole install. Nothing to clone.
+
+**Setting up a machine without clicking anything** is one command instead:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ideaplaces/agent-inbox/main/setup-mac.sh \
+  | bash -s -- --ntfy <topic>
+```
+
+It installs, configures the transport, writes the hooks, registers the login item and
+launches, driving the same code the setup window does through the app's CLI flags. It falls
+back to downloading the release DMG when Homebrew is not installed. Teams on Azure Key
+Vault can use `--keyvault <name>` instead and skip handling secrets entirely.
 
 ### 2. Your other machines
 
