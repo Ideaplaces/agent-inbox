@@ -154,7 +154,9 @@ final class Poller {
 
             for item in apply(result.messages) {
                 Notifier.post(item, soundName: settings.soundName)
+                countForUsage(item)
             }
+            reportUsageIfADayHasPassed()
 
         } catch {
             consecutiveFailures += 1
@@ -163,6 +165,42 @@ final class Poller {
                 status = .failed(error.localizedDescription)
             }
         }
+    }
+
+    /// Tally one arrival. Kind only, and only in memory on this Mac until a
+    /// day's worth is sent as a single number.
+    private func countForUsage(_ item: InboxItem) {
+        guard settings.shareUsageData else { return }
+        switch item.kind {
+        case .finished: settings.pendingFinished += 1
+        case .needsYou: settings.pendingNeedsYou += 1
+        }
+    }
+
+    /// One event a day, carrying the counts, and only when switched on.
+    ///
+    /// Driven off the poll rather than a timer of its own: the poll is already
+    /// the app's heartbeat, and a Mac that is asleep or offline should report
+    /// when it wakes rather than on a schedule that ran without it.
+    private func reportUsageIfADayHasPassed() {
+        guard settings.shareUsageData, !settings.analyticsID.isEmpty else { return }
+        let now = Date()
+        guard Analytics.shouldSend(last: settings.analyticsLastSent, now: now) else { return }
+
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        Analytics.send(Analytics.payload(
+            distinctID: settings.analyticsID,
+            appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "",
+            osVersion: "\(os.majorVersion).\(os.minorVersion)",
+            finished: settings.pendingFinished,
+            needsYou: settings.pendingNeedsYou,
+            watchMode: settings.watchMode,
+            selfHosted: settings.ntfyServer != AppSettings.publicNtfyServer,
+            customTags: settings.watchTags != AppSettings.defaultWatchTags))
+
+        settings.analyticsLastSent = now
+        settings.pendingFinished = 0
+        settings.pendingNeedsYou = 0
     }
 
     /// Send one event through the real pipeline so the user can see it work.

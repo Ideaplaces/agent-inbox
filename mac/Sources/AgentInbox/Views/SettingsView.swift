@@ -36,6 +36,11 @@ struct GeneralSettings: View {
                         launchAtLogin = LoginItem.isEnabled
                         model.settings.hasDecidedLoginItem = true
                     }
+                Toggle("Share anonymous usage data", isOn: $settings.shareUsageData)
+                Text("Off by default. One event a day: how many notifications arrived, this app's version and macOS version. Never any message text, repo name, path, host name or topic.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Picker("Sound", selection: $settings.soundName) {
                     ForEach(Self.sounds, id: \.self) { name in
                         Text(name.isEmpty ? "Silent" : name).tag(name)

@@ -9,6 +9,7 @@ struct WelcomeView: View {
     @Environment(AppModel.self) private var model
     @State private var copied = false
     @State private var launchAtLogin = LoginItem.isEnabled
+    @State private var shareUsage = AppSettings.shared.shareUsageData
 
     var body: some View {
         @Bindable var settings = model.settings
@@ -77,6 +78,18 @@ struct WelcomeView: View {
                             launchAtLogin = LoginItem.isEnabled
                             model.settings.hasDecidedLoginItem = true
                         }
+                    // Asked here rather than only buried in Settings, because a
+                    // choice nobody is shown is not a choice they made. Left
+                    // unticked, and it stays unticked if this window is closed.
+                    Toggle("Share anonymous usage data", isOn: $shareUsage)
+                        .font(.system(size: 12))
+                        .onChange(of: shareUsage) { _, value in
+                            model.settings.shareUsageData = value
+                        }
+                    Text("Counts only: how many notifications arrive, and which versions you run. Never message text, repo names, paths or your topic.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Divider()

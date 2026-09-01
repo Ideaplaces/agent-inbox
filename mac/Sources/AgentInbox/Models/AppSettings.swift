@@ -90,6 +90,40 @@ final class AppSettings {
     var hasCompletedOnboarding: Bool {
         didSet { defaults.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding") }
     }
+    /// Anonymous usage counts, off until you say otherwise.
+    ///
+    /// Not mirrored into `~/.agent-inbox/`, unlike most of this file. The bash
+    /// senders report nothing and never will: `notify.sh` runs as a hook on
+    /// every turn on every machine and must never block a session, which rules
+    /// out putting a network call to an analytics endpoint in that path. The
+    /// app already sees every message, so it can count them without the
+    /// senders knowing anything about it.
+    var shareUsageData: Bool {
+        didSet {
+            defaults.set(shareUsageData, forKey: "shareUsageData")
+            // A fresh id each time it is switched on, so turning it off and on
+            // again is a new anonymous install rather than a resumed identity.
+            if shareUsageData { analyticsID = UUID().uuidString }
+        }
+    }
+    /// A random id, made when usage sharing is turned on. Not derived from
+    /// anything about the machine or the person, and thrown away when sharing
+    /// goes off.
+    var analyticsID: String {
+        didSet { defaults.set(analyticsID, forKey: "analyticsID") }
+    }
+    var analyticsLastSent: Date? {
+        didSet { defaults.set(analyticsLastSent, forKey: "analyticsLastSent") }
+    }
+    /// Counted locally between sends, so one event a day can carry the total
+    /// and no event has to be sent per notification.
+    var pendingFinished: Int {
+        didSet { defaults.set(pendingFinished, forKey: "pendingFinished") }
+    }
+    var pendingNeedsYou: Int {
+        didSet { defaults.set(pendingNeedsYou, forKey: "pendingNeedsYou") }
+    }
+
     /// Whether anyone has yet said whether this app opens at login.
     ///
     /// First launch turns it on for you, so the answer to "why did it stop
@@ -130,6 +164,11 @@ final class AppSettings {
         hostLabel = defaults.string(forKey: "hostLabel") ?? Host.current().localizedName ?? "mac"
         hasCompletedOnboarding = defaults.bool(forKey: "hasCompletedOnboarding")
         hasDecidedLoginItem = defaults.bool(forKey: "hasDecidedLoginItem")
+        shareUsageData = defaults.bool(forKey: "shareUsageData")
+        analyticsID = defaults.string(forKey: "analyticsID") ?? ""
+        analyticsLastSent = defaults.object(forKey: "analyticsLastSent") as? Date
+        pendingFinished = defaults.integer(forKey: "pendingFinished")
+        pendingNeedsYou = defaults.integer(forKey: "pendingNeedsYou")
     }
 
     // Spoken forms ship alongside the typed ones because dictation cannot

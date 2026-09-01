@@ -241,6 +241,43 @@ and working directory paths. So:
   nothing on its own.
 - Either way, think twice if you work on sensitive codebases.
 
+## Anonymous usage data, off by default
+
+Nothing about your usage leaves your Mac unless you switch it on, in
+**Settings → General** or with the unticked box in the setup window.
+
+Switched on, the app sends **one event a day**, and this is all of it:
+
+```json
+{
+  "app_version": "0.1.26",
+  "macos_version": "26.0",
+  "notifications_finished": 41,
+  "notifications_needs_you": 3,
+  "watch_mode": "all",
+  "self_hosted": true,
+  "custom_tags": false
+}
+```
+
+It is keyed on a random id generated when you turn it on, and discarded when you turn it
+off. Turning it off and on again makes a new one, so it cannot be used to follow you across
+that.
+
+**The key list above is the whole contract, and a test enforces it.** Every value is a
+count, a flag or a version number. There is nowhere in the event for a message, a repo
+name, a directory path, a host label, a session id, your topic or your token, because none
+of those are ever assembled in the first place. Adding a key means editing the test, which
+is the moment somebody has to ask whether it describes a person.
+
+**The senders send nothing.** `notify.sh` runs as a hook on every turn on every machine and
+must never block a session, so there is no analytics call anywhere in that path. The
+counting happens in the Mac app, which already sees every message.
+
+**One event a day rather than one per notification,** because a per-message event would be
+a record of the hours you work. A daily total answers how much the thing reports and
+describes nobody's day.
+
 ## Updates
 
 The app checks once a day and installs updates itself
@@ -284,7 +321,9 @@ running as another user can read it, so the token lives in `~/.agent-inbox/ntfy-
 `notify.sh` posts to whatever it finds: a leftover config is not inert, it keeps sending.
 
 These are sender-side only, and the app writes them itself so the two can never disagree.
-Poll interval, sound, expiry and idle threshold are app-side and live in Settings.
+Poll interval, sound, expiry, idle threshold and usage sharing are app-side and live in
+Settings. Usage sharing is deliberately not in this file: the senders never report anything,
+so there would be nothing for them to read.
 Notifications play **Pop** by default; **Settings → General → Sound** changes it, and
 `Silent` turns it off.
 
