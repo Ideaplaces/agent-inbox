@@ -3,6 +3,15 @@
     <channel>
         <title>Agent Inbox</title>
         <item>
+            <title>0.1.25</title>
+            <pubDate>Mon, 31 Aug 2026 22:05:53 -0400</pubDate>
+            <link>https://github.com/Ideaplaces/agent-inbox</link>
+            <sparkle:version>1025</sparkle:version>
+            <sparkle:shortVersionString>0.1.25</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/Ideaplaces/agent-inbox/releases/download/v0.1.25/AgentInbox-0.1.25.dmg" length="2595964" type="application/octet-stream" sparkle:edSignature="97pHNUdrH2RSxtML7RYKkno9+TuulY/HKddXu0+b12OeL2Eoe4pH/f+xFW3CmqbdbPtrFove5J/sK7h2h5jJBw=="/>
+        </item>
+        <item>
             <title>0.1.24</title>
             <pubDate>Mon, 31 Aug 2026 21:38:32 -0400</pubDate>
             <link>https://github.com/Ideaplaces/agent-inbox</link>
