@@ -121,6 +121,17 @@ jobs:
           fi
           security delete-keychain "$RUNNER_TEMP/build.keychain" 2>/dev/null || true
 
+      # A second copy under a name with no version in it, so
+      # releases/latest/download/AgentInbox.dmg is a download link that never
+      # has to be edited again. It is the same bytes, so it carries the same
+      # signature and the same stapled notarization ticket.
+      #
+      # The cask keeps pointing at the versioned name and the tap's bump
+      # workflow matches on it, or it would find two images and pick badly.
+      - name: Add a stable-named copy for the download link
+        working-directory: mac
+        run: cp "build/AgentInbox-$(cat VERSION).dmg" build/AgentInbox.dmg
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:

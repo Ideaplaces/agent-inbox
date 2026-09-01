@@ -1,5 +1,9 @@
 # Agent Inbox
 
+[![Download](https://img.shields.io/badge/download-latest-brightgreen?style=flat-square)](https://github.com/Ideaplaces/agent-inbox/releases/latest/download/AgentInbox.dmg)
+[![Requirements](https://img.shields.io/badge/requirements-macOS%2014%2B-fa4e49?style=flat-square)](#install)
+[![License](https://img.shields.io/github/license/Ideaplaces/agent-inbox?style=flat-square)](LICENSE)
+
 **Native Mac notifications for every Claude Code session that finishes or needs you, across all your machines.**
 
 If you run several Claude Code sessions in parallel, some local and some over SSH on a dev
@@ -41,18 +45,20 @@ You need Claude Code already working, and macOS 14 or newer for the app.
 
 ### 1. Your Mac
 
-Pick either one. There is no difference in what you end up with.
+Either one. There is no difference in what you end up with.
 
-**With Homebrew:**
+**Download**
+
+Get [**AgentInbox.dmg**](https://github.com/Ideaplaces/agent-inbox/releases/latest/download/AgentInbox.dmg),
+open it, and drag Agent Inbox onto the Applications folder next to it. That link always
+serves the newest version. It is signed and notarized, so it opens with no Gatekeeper
+warning and updates itself from then on.
+
+**Homebrew**
 
 ```bash
 brew install --cask ideaplaces/tap/agent-inbox
 ```
-
-**Without it,** download the latest `.dmg` from
-[Releases](https://github.com/Ideaplaces/agent-inbox/releases) and drag it to Applications.
-It is signed and notarized, so it opens with no Gatekeeper warning and updates itself from
-then on.
 
 Either way the app opens itself and **puts itself in Login Items**, because a menubar app
 that is not running is not an inbox. You never have to remember to start it, and it is
