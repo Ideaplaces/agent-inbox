@@ -349,6 +349,13 @@ case "$KIND" in
     # Record when the user handed work to the agent; used to skip quick turns.
     [ -n "$SESSION_ID" ] && printf '%s' "$NOW" > "$STATE_DIR/$SESSION_ID.start"
     record_tags "$(printf '%s' "$INPUT" | jq -r '.prompt // empty')"
+    # Nothing else ever removes a session's .start or .watch, so the directory
+    # only grows: 47 files on one Mac, 218 on a dev box. A prompt is the cheap
+    # place to sweep, once per message you type. A week is long past any
+    # session anyone comes back to, and a swept .watch simply means the
+    # conversation follows WATCH_MODE again. Silent, and never a reason for the
+    # hook to fail.
+    find "$STATE_DIR" -type f -mtime +7 -delete 2>/dev/null || true
     # Typing in a conversation is proof you have seen it, so its row in the
     # inbox is answered and should go. Only sent when this session actually has
     # something outstanding: without the marker every prompt would publish a

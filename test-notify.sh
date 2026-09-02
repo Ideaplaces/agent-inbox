@@ -677,5 +677,23 @@ fi
 
 rm -f "$CW" "$AT"
 
+# --- the state directory is swept, so it stops growing forever ---
+#
+# Nothing removed a session's .start or .watch once written, and the count was
+# in the hundreds on a dev box. A prompt event sweeps anything older than a
+# week and leaves the rest alone.
+new_home
+mkdir -p "$HOME/.agent-inbox/state"
+: > "$HOME/.agent-inbox/state/ancient.start"
+touch -t 202001010000 "$HOME/.agent-inbox/state/ancient.start"
+: > "$HOME/.agent-inbox/state/fresh.watch"
+run prompt "$(prompt_payload 'anything at all')" >/dev/null
+[ ! -f "$HOME/.agent-inbox/state/ancient.start" ] \
+  && ok "a prompt removes state files older than a week" \
+  || fail "a prompt removes state files older than a week" "ancient.start is still there"
+[ -f "$HOME/.agent-inbox/state/fresh.watch" ] \
+  && ok "and leaves recent ones alone" \
+  || fail "and leaves recent ones alone" "fresh.watch was removed"
+
 echo
 echo "$PASS checks passed"

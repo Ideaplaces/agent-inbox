@@ -355,7 +355,9 @@ as enabled, so nothing in the app can warn you about it.
 
 Runtime state also lives in `~/.agent-inbox/`: `bin/notify.sh` (unpacked from the app),
 the sender's transport config, `state/<session>.start` (turn timers), `presence` (seconds
-clocked at the keyboard), and `items.json` (the inbox itself).
+clocked at the keyboard), and `items.json` (the inbox itself). The per-session files in
+`state/` are pruned after 7 days, on the next prompt you type, so the directory does not
+grow forever.
 
 ## Messages arrive, they are not fetched
 
