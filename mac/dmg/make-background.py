@@ -1,71 +1,82 @@
 #!/usr/bin/env python3
-"""Draw the disk image's background: a light field and one arrow.
+"""Draw the disk image's background: a white field, a drop panel, an arrow.
 
-Restraint is the whole design. The window has to say "drag that onto this" and
-nothing else, so there is no logo, no wordmark and no instructions; the two
-icons are already the message and the arrow is the verb. Stats, Rectangle and
-most of the Mac apps people already know how to install ship exactly this.
+The shape every good Mac installer uses, and the reason each part is there:
 
-Light grey rather than the app's own dark palette, and that is a decision worth
-keeping. Finder draws the icon labels in the system label colour, which follows
-Light or Dark mode, while a background picture does not follow anything. A dark
-field therefore reads as black text on black for every viewer in Light mode.
-A light field is the one choice that cannot fail that way, which is why every
-installer in the wild is light.
+- **White, not the app's own dark palette.** Finder takes the icon label colour
+  from the background picture rather than from Light or Dark mode, so a light
+  field gives dark, readable labels for everyone. Checked against a shipping
+  installer on a Mac in Dark mode before committing to it.
+- **A soft panel behind the Applications folder only.** Behind both, it would
+  be decoration; behind the destination alone, it reads as a place to drop
+  something.
+- **A curved arrow.** A straight line between two icons reads as a divider
+  separating them. A curve reads as a hand moving one onto the other.
+
+Nothing else. No logo and no instructions: the two icons are already the
+message and the arrow is the verb.
 
     pip install pillow
     ./make-background.py          # writes background.png next to this script
 
-Drawn at 4x and reduced, because Pillow's lines have no antialiasing of their
-own and the arrow is the only edge in the picture.
+Drawn several times over size and reduced, because Pillow does not antialias
+its own strokes and this picture is nothing but curves.
 """
+import math
 import os
 import sys
 
 from PIL import Image, ImageDraw
 
+import layout as L
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "background.png")
 
-# Points, matching the window content area in make-ds-store.py. The image is
-# written at 2x and tagged 144 dpi so Finder draws it at this size, sharp.
-WIDTH, HEIGHT = 640, 380
 SCALE = 2
-# Drawn larger still, then reduced, purely for smooth diagonals.
 SUPERSAMPLE = 4
 
-FIELD = (222, 222, 224)
-# macOS secondary label, near enough. Full black reads as an instruction
-# shouted rather than offered.
-INK = (60, 60, 67)
 
-# The arrow sits in the gap between the two 128pt icons, on their centre line.
-ARROW_Y = 190
-ARROW_FROM, ARROW_TO = 280, 360
-STROKE = 2.5
-HEAD = 13
+def bezier(p0, p1, p2, steps=160):
+    """Points along a quadratic curve, for drawing it as a polyline."""
+    for i in range(steps + 1):
+        t = i / steps
+        u = 1 - t
+        yield (u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0],
+               u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1])
 
 
 def main() -> int:
     s = SCALE * SUPERSAMPLE
-    im = Image.new("RGB", (WIDTH * s, HEIGHT * s), FIELD)
+    im = Image.new("RGB", (L.WIDTH * s, L.HEIGHT * s), L.FIELD)
     d = ImageDraw.Draw(im)
 
-    y = ARROW_Y * s
-    x0, x1 = ARROW_FROM * s, ARROW_TO * s
-    w = max(1, round(STROKE * s))
-    head = HEAD * s
+    half = L.PANEL_SIZE / 2
+    d.rounded_rectangle(
+        [((L.APPLICATIONS_X - half) * s, (L.ICON_Y - half) * s),
+         ((L.APPLICATIONS_X + half) * s, (L.ICON_Y + half) * s)],
+        radius=L.PANEL_RADIUS * s, fill=L.PANEL)
 
-    d.line([(x0, y), (x1, y)], fill=INK, width=w)
-    # A plain chevron, the same weight as the shaft, meeting it at the tip.
-    d.line([(x1 - head, y - head), (x1, y)], fill=INK, width=w)
-    d.line([(x1 - head, y + head), (x1, y)], fill=INK, width=w)
+    width = max(1, round(L.ARROW_STROKE * s))
+    curve = [(x * s, y * s) for x, y in
+             bezier(L.ARROW_START, L.ARROW_CONTROL, L.ARROW_END)]
+    d.line(curve, fill=L.ARROW_INK, width=width, joint="curve")
 
-    im = im.resize((WIDTH * SCALE, HEIGHT * SCALE), Image.LANCZOS)
-    # 72 dpi per point times the scale, so Finder lays it out at WIDTH x HEIGHT
-    # points rather than drawing it at twice the size.
+    # The head follows the curve's own direction at its end, so it looks drawn
+    # in one stroke rather than stuck on.
+    tip = curve[-1]
+    angle = math.atan2(tip[1] - curve[-2][1], tip[0] - curve[-2][0])
+    for spread in (2.5, -2.5):
+        d.line([tip,
+                (tip[0] + L.ARROW_HEAD * s * math.cos(angle + spread),
+                 tip[1] + L.ARROW_HEAD * s * math.sin(angle + spread))],
+               fill=L.ARROW_INK, width=width)
+
+    im = im.resize((L.WIDTH * SCALE, L.HEIGHT * SCALE), Image.LANCZOS)
+    # 72 dpi per point times the scale, so Finder lays the picture out at the
+    # window's size rather than drawing it at twice that.
     im.save(OUT, "PNG", dpi=(72 * SCALE, 72 * SCALE))
-    print("wrote %s (%dx%d at %d dpi)" % (OUT, WIDTH * SCALE, HEIGHT * SCALE, 72 * SCALE))
+    print("wrote %s (%dx%d at %d dpi)" % (OUT, L.WIDTH * SCALE, L.HEIGHT * SCALE, 72 * SCALE))
     return 0
 
 

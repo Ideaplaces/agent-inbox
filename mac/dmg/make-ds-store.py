@@ -33,19 +33,9 @@ from ds_store import DSStore
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "DS_Store")
 
-# The window, in points. 640x400 is wide enough to put the two icons well
-# apart at 128pt without the drag looking like a shuffle.
-WIDTH, HEIGHT = 640, 400
-# Where the window opens on screen. Finder clamps this to the display, so a
-# modest offset is safer than trying to centre it for a screen we cannot see.
-LEFT, TOP = 200, 140
-
-ICON_SIZE = 128
-TEXT_SIZE = 14
-# Both icons on one line, each centred in its half of the window.
-ICON_Y = 190
-APP_X = 160
-APPLICATIONS_X = 480
+# Shared with make-background.py, so the picture is drawn for the layout the
+# icons are actually placed in.
+import layout as L
 
 # The names have to match the staging folder exactly, or Finder falls back to
 # an automatic position and the file is silently useless.
@@ -116,7 +106,7 @@ def main() -> int:
 
     with DSStore.open(OUT, "w+") as d:
         d["."]["bwsp"] = {
-            "WindowBounds": "{{%d, %d}, {%d, %d}}" % (LEFT, TOP, WIDTH, HEIGHT),
+            "WindowBounds": "{{%d, %d}, {%d, %d}}" % (L.LEFT, L.TOP, L.WIDTH, L.HEIGHT + L.TITLE_BAR),
             # An installer window is two icons and an instruction. Every strip
             # of chrome on it is another thing that is not the app.
             "ShowSidebar": False,
@@ -135,11 +125,11 @@ def main() -> int:
             "gridOffsetX": 0.0,
             "gridOffsetY": 0.0,
             "gridSpacing": 100.0,
-            "iconSize": float(ICON_SIZE),
+            "iconSize": float(L.ICON_SIZE),
             "labelOnBottom": True,
             "showIconPreview": True,
             "showItemInfo": False,
-            "textSize": float(TEXT_SIZE),
+            "textSize": float(L.TEXT_SIZE),
             # Present even though the background is a picture. Finder writes
             # them, so a file without them is not a file Finder wrote.
             "backgroundColorRed": 1.0,
@@ -151,8 +141,8 @@ def main() -> int:
         # explicit (type, value) pair.
         d["."]["vSrn"] = ("long", 1)
 
-        d[APP_NAME]["Iloc"] = (APP_X, ICON_Y)
-        d[LINK_NAME]["Iloc"] = (APPLICATIONS_X, ICON_Y)
+        d[APP_NAME]["Iloc"] = (L.APP_X, L.ICON_Y)
+        d[LINK_NAME]["Iloc"] = (L.APPLICATIONS_X, L.ICON_Y)
 
     print("wrote %s" % OUT)
     return 0
