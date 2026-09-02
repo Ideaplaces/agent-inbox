@@ -280,13 +280,11 @@ private struct ItemRow: View {
                         .lineLimit(1)
                     if let duration = item.duration {
                         Text(duration)
-                            .font(.system(size: 10))
-                            .foregroundStyle(.tertiary)
+                            .note(.tertiary)
                     }
                     Spacer(minLength: 4)
                     Text(item.receivedAt, style: .time)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
+                        .note(.tertiary)
                 }
                 if let thread = item.thread {
                     Text(thread)

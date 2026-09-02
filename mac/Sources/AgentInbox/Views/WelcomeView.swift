@@ -7,9 +7,6 @@ import SwiftUI
 @MainActor
 struct WelcomeView: View {
     @Environment(AppModel.self) private var model
-    @State private var copied = false
-    @State private var launchAtLogin = LoginItem.isEnabled
-    @State private var shareUsage = AppSettings.shared.shareUsageData
 
     var body: some View {
         @Bindable var settings = model.settings
@@ -48,48 +45,20 @@ struct WelcomeView: View {
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
-                        HStack(alignment: .top, spacing: 8) {
-                            Text(model.remoteInstallCommand)
-                                .font(.system(size: 10, design: .monospaced))
-                                .textSelection(.enabled)
-                                .padding(8)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
-                            Button(copied ? "Copied" : "Copy") {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(
-                                    model.remoteInstallCommand, forType: .string)
-                                copied = true
-                            }
-                            .controlSize(.small)
-                        }
+                        RemoteInstallCommand()
                         Text("On a remote machine set HOST_LABEL to its SSH host alias, so clicking an item here opens it over Remote-SSH.")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.tertiary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .note(.tertiary)
                     }
                 }
 
                 step(4, "Stay running") {
-                    Toggle("Open Agent Inbox at login", isOn: $launchAtLogin)
+                    LoginItemToggle()
                         .font(.system(size: 12))
-                        .onChange(of: launchAtLogin) { _, value in
-                            try? LoginItem.set(value)
-                            launchAtLogin = LoginItem.isEnabled
-                            model.settings.hasDecidedLoginItem = true
-                        }
-                    // Asked here rather than only buried in Settings, because a
-                    // choice nobody is shown is not a choice they made. Left
-                    // unticked, and it stays unticked if this window is closed.
-                    Toggle("Share anonymous usage data", isOn: $shareUsage)
+                    // Asked here rather than only in Settings, because a choice
+                    // nobody is shown is not a choice they made. Unticked, and
+                    // it stays unticked if this window is closed.
+                    UsageSharingToggle()
                         .font(.system(size: 12))
-                        .onChange(of: shareUsage) { _, value in
-                            model.settings.shareUsageData = value
-                        }
-                    Text("Counts only: how many notifications arrive, and which versions you run. Never message text, repo names, paths or your topic.")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Divider()
@@ -150,67 +119,4 @@ struct WelcomeView: View {
             }
         }
     }
-}
-
-/// Shared by onboarding and Settings so there is exactly one place that knows
-/// what a transport needs.
-@MainActor
-struct TransportPicker: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        @Bindable var settings = model.settings
-
-        VStack(alignment: .leading, spacing: 10) {
-            Text(AppSettings.transportIntro(server: settings.ntfyServer))
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    TextField("topic", text: $settings.ntfyTopic)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 11, design: .monospaced))
-                    Button("Generate") {
-                        settings.ntfyTopic = AppSettings.randomNtfyTopic()
-                        settings.transport = .ntfy
-                        model.poller.restart()
-                    }
-                    .controlSize(.small)
-                }
-                Text(AppSettings.topicExplanation(
-                    server: settings.ntfyServer, token: settings.ntfyToken))
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                LabeledContent("Server") {
-                    // Hidden, because LabeledContent is already drawing the
-                    // label: a TextField's first argument is its label, not a
-                    // placeholder, so leaving it visible prints the default
-                    // next to the field as if it were a second value.
-                    TextField("", text: $settings.ntfyServer,
-                              prompt: Text(AppSettings.publicNtfyServer))
-                        .labelsHidden()
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 11))
-                }
-                .font(.system(size: 11))
-                // Only meaningful on a self-hosted server. ntfy.sh has no
-                // accounts, so showing this against the default would
-                // invite people to fill in a field that does nothing.
-                if settings.ntfyServer != AppSettings.publicNtfyServer {
-                    LabeledContent("Token") {
-                        SecureField("", text: $settings.ntfyToken,
-                                    prompt: Text("optional"))
-                            .labelsHidden()
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(size: 11))
-                    }
-                    .font(.system(size: 11))
-                }
-            }
-        }
-    }
-
 }

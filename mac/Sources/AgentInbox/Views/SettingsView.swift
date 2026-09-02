@@ -44,7 +44,6 @@ struct SettingsPanes: View {
 @MainActor
 struct GeneralSettings: View {
     @Environment(AppModel.self) private var model
-    @State private var launchAtLogin = LoginItem.isEnabled
 
     private static let sounds = [
         "", "Glass", "Ping", "Pop", "Blow", "Bottle", "Funk", "Hero", "Morse", "Purr", "Submarine",
@@ -55,17 +54,8 @@ struct GeneralSettings: View {
 
         Form {
             Section {
-                Toggle("Open at login", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { _, value in
-                        try? LoginItem.set(value)
-                        launchAtLogin = LoginItem.isEnabled
-                        model.settings.hasDecidedLoginItem = true
-                    }
-                Toggle("Share anonymous usage data", isOn: $settings.shareUsageData)
-                Text("Off by default. One event a day: how many notifications arrived, this app's version and macOS version. Never any message text, repo name, path, host name or topic.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                LoginItemToggle()
+                UsageSharingToggle()
                 Picker("Sound", selection: $settings.soundName) {
                     ForEach(Self.sounds, id: \.self) { name in
                         Text(name.isEmpty ? "Silent" : name).tag(name)
@@ -83,8 +73,7 @@ struct GeneralSettings: View {
                         Text("Version \(model.updater.currentVersion)")
                         if let last = model.updater.lastCheck {
                             Text("Last checked \(last.formatted(date: .abbreviated, time: .shortened))")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.secondary)
+                                .note()
                         }
                     }
                     Spacer()
@@ -106,8 +95,7 @@ struct GeneralSettings: View {
                     }
                 }
                 Text("Items age against time you actually spend at this Mac, so a break never drains the inbox behind your back.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
+                    .note()
                 LabeledContent("Count as away after") {
                     Stepper(value: $settings.idleThreshold, in: 30...600, step: 30) {
                         Text("\(settings.idleThreshold)s idle")
@@ -127,22 +115,16 @@ struct GeneralSettings: View {
                     }
                 }
                 Text("A quick back-and-forth is not worth interrupting yourself over, so turns shorter than this are dropped. Set it to zero and every turn reports, however short.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .note()
                 Text("This Mac only. Every machine keeps its own config, so set it again on a dev box you report from.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .note(.tertiary)
 
                 Picker("Report", selection: $settings.watchMode) {
                     Text("Every conversation").tag("all")
                     Text("Only tagged conversations").tag("tagged")
                 }
                 Text(AppSettings.reportModeCaption(watchMode: settings.watchMode))
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .note()
 
                 // A TextField's first argument is its label, not a
                 // placeholder. Inside LabeledContent that label is drawn a
@@ -159,8 +141,7 @@ struct GeneralSettings: View {
                         .onSubmit { settings.watchTags = AppSettings.normalizeTags(settings.watchTags) }
                 }
                 Text(AppSettings.watchTagCaption(watchMode: settings.watchMode))
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
+                    .note()
                 LabeledContent("Mute tag") {
                     TextField("", text: $settings.muteTag,
                               prompt: Text(AppSettings.defaultMuteTag))
@@ -170,13 +151,10 @@ struct GeneralSettings: View {
                         .onSubmit { settings.muteTag = AppSettings.normalizeTags(settings.muteTag) }
                 }
                 Text(AppSettings.muteTagCaption(watchMode: settings.watchMode))
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
+                    .note()
                 HStack {
                     Text("Typed or said anywhere in a message. Separate several with commas, which lets a tag be a phrase like \"watch this\" for dictation. Case does not matter.")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .note()
                     Spacer()
                     Button("Reset") {
                         settings.watchTags = AppSettings.defaultWatchTags
@@ -185,8 +163,7 @@ struct GeneralSettings: View {
                     .controlSize(.small)
                 }
                 Text("This Mac only. Every machine keeps its own config, so set these again on a dev box you report from.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
+                    .note(.tertiary)
             }
 
             Section("Polling") {
@@ -223,8 +200,7 @@ struct TransportSettings: View {
             }
             Section {
                 Text("Message bodies carry snippets of your prompts and Claude's replies, plus repo names and paths. Keep the channel private.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
+                    .note()
             }
         }
         .formStyle(.grouped)
@@ -260,7 +236,14 @@ struct MachineSettings: View {
         Form {
             Section("This Mac") {
                 LabeledContent("Shown as") {
-                    TextField("host label", text: $settings.hostLabel)
+                    // Hidden, because LabeledContent already draws the label.
+                    // The third site of the same mistake: a TextField's first
+                    // argument is its label, not a placeholder, so this one was
+                    // printing "host label" next to the machine's actual name
+                    // as though it were part of the value.
+                    TextField("", text: $settings.hostLabel,
+                              prompt: Text(Host.current().localizedName ?? "this Mac"))
+                        .labelsHidden()
                         .textFieldStyle(.roundedBorder)
                 }
                 HStack {
@@ -278,24 +261,12 @@ struct MachineSettings: View {
                 }
                 if model.hasForeignHooks {
                     Text("Some hooks still point at an older shell install. Reinstall to route everything through this app.")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.orange)
+                        .note(.orange)
                 }
             }
 
             Section("Other machines") {
-                Text(model.remoteInstallCommand)
-                    .font(.system(size: 10, design: .monospaced))
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                HStack {
-                    Spacer()
-                    Button(copied ? "Copied" : "Copy Command") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(model.remoteInstallCommand, forType: .string)
-                        copied = true
-                    }
-                }
+                RemoteInstallCommand()
             }
 
             Section {
@@ -311,7 +282,7 @@ struct MachineSettings: View {
                     }
                     Spacer()
                     if let message = model.transientMessage {
-                        Text(message).font(.system(size: 10)).foregroundStyle(.secondary)
+                        Text(message).note()
                     }
                 }
             }
