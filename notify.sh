@@ -273,10 +273,18 @@ send_control() { # $1 = the instruction
 #   🗣 the most recent real user message (what you asked for right now)
 # Long sessions drift far from their first prompt, so recency beats origin;
 # the first prompt is only the last-resort fallback.
+#
+# Sets SUMMARY and ASK, the two values, and CONTEXT, the rendered lines. They
+# are variables rather than output because the same two values also go into
+# the contract line below, and a value computed once cannot disagree with
+# itself.
 session_context() {
+  SUMMARY=""; ASK=""; CONTEXT=""
   [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ] || return 0
   local sum ask out=""
-  sum="$(grep -m 20 '"type":"summary"' "$TRANSCRIPT" 2>/dev/null | tail -1 | jq -r '.summary // ""' 2>/dev/null | tr '\n' ' ' | head -c 150)"
+  # Trimmed like _user_text is: jq ends its output with a newline, which tr
+  # turns into a trailing space that the contract line would otherwise carry.
+  sum="$(grep -m 20 '"type":"summary"' "$TRANSCRIPT" 2>/dev/null | tail -1 | jq -r '.summary // ""' 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]]*$//' | head -c 150)"
   # A summary entry is only written when a session is compacted, and most never
   # are: across every transcript on this machine the count was zero, so the
   # thread line has never once been sent and every notification arrived as a
@@ -285,7 +293,7 @@ session_context() {
   # entry repeats often and a transcript can be tens of megabytes.
   if [ -z "$sum" ]; then
     sum="$(tail -n 2000 "$TRANSCRIPT" 2>/dev/null | grep '"type":"ai-title"' | tail -1 \
-      | jq -r '.aiTitle // ""' 2>/dev/null | tr '\n' ' ' | head -c 150)"
+      | jq -r '.aiTitle // ""' 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]]*$//' | head -c 150)"
   fi
   # Neither entry exists on older Claude Code: the Linux boxes run 2.1.12,
   # which writes no summary and no ai-title, so both lookups above come back
@@ -302,7 +310,38 @@ session_context() {
 "
     out="${out}🗣 $ask"
   fi
-  printf '%s' "$out"
+  SUMMARY="$sum"; ASK="$ask"; CONTEXT="$out"
+}
+
+# The same message again, as one line of JSON after the human lines and the
+# footer.
+#
+# Everything above it is convention: the app takes the title apart on " @ "
+# and a trailing "(...)", sorts the body lines by the emoji they start with and
+# finds the footer by its "session xxxxxxxx" shape. Bash assembles, Swift
+# disassembles, and nothing but habit keeps the two in step: a body with its
+# subject line missing parsed fine for a whole release. This line is the
+# contract. Every field named, absent ones null, and a version so the app can
+# tell what it is reading. The human lines stay for the ntfy History page and
+# for older apps.
+#
+# jq builds it. Hand-concatenated JSON is one quote in an agent's sentence away
+# from a line the app cannot parse, and the closing words are exactly the kind
+# of text that carries quotes, backslashes and newlines. Every string goes in
+# through --arg, so jq does the escaping.
+contract_line() { # $1 = finished | needsYou
+  jq -nc \
+    --arg kind "$1" --arg repo "$REPO" --arg host "$HOST_LABEL" \
+    --arg duration "${DURATION:-}" --argjson elapsed "${ELAPSED:-null}" \
+    --arg summary "${SUMMARY:-}" --arg ask "${ASK:-}" --arg closing "${CLOSING:-}" \
+    --arg detail "${DETAIL:-}" --arg waitingOn "${WAITING_ON:-}" \
+    --arg session "${SESSION_ID:0:8}" --arg cwd "$CWD" \
+    'def nul: if . == "" then null else . end;
+     {v: 1, kind: $kind, repo: $repo, host: $host,
+      duration: ($duration | nul), elapsed: $elapsed,
+      summary: ($summary | nul), ask: ($ask | nul), closing: ($closing | nul),
+      detail: ($detail | nul), waitingOn: ($waitingOn | nul),
+      session: ($session | nul), cwd: ($cwd | nul)}' 2>/dev/null
 }
 
 case "$KIND" in
@@ -329,25 +368,27 @@ case "$KIND" in
   stop)
     START=0
     [ -n "$SESSION_ID" ] && [ -f "$STATE_DIR/$SESSION_ID.start" ] && START="$(cat "$STATE_DIR/$SESSION_ID.start")"
+    # Both stay empty when the start time is unknown. The title reads that as
+    # "no duration" and the contract line as null.
+    ELAPSED=""; DURATION=""
     if [ "$START" -gt 0 ]; then
       ELAPSED=$(( NOW - START ))
       # Quick conversational turns don't belong in the inbox.
       [ "$ELAPSED" -lt "$MIN_SECONDS" ] && exit 0
       DURATION="$(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s"
-    else
-      DURATION="unknown"
     fi
     # How the turn ended, which is what tells two long sessions apart. Falls
     # back to the head of the last message when there is no prose to reduce,
     # so a turn that ended in a code block still says something.
     CLOSING="$(closing_words)"
-    SNIPPET=""
-    [ -z "$CLOSING" ] && SNIPPET="$(last_assistant_text 600)"
-    CONTEXT="$(session_context)"
-    if [ "$DURATION" = "unknown" ]; then
-      TITLE="✅ $REPO @ $HOST_LABEL"
-    else
+    DETAIL=""
+    [ -z "$CLOSING" ] && DETAIL="$(last_assistant_text 600)"
+    WAITING_ON=""
+    session_context
+    if [ -n "$DURATION" ]; then
       TITLE="✅ $REPO @ $HOST_LABEL ($DURATION)"
+    else
+      TITLE="✅ $REPO @ $HOST_LABEL"
     fi
     BODY=""
     [ -n "$CONTEXT" ] && BODY="$CONTEXT
@@ -355,8 +396,9 @@ case "$KIND" in
     # Braced, because bash takes the emoji's bytes as part of the name and
     # "$BODY💬" silently expands to nothing, dropping the context above it.
     [ -n "$CLOSING" ] && BODY="${BODY}💬 $CLOSING"
-    [ -n "$SNIPPET" ] && BODY="${BODY}$SNIPPET"
+    [ -n "$DETAIL" ] && BODY="${BODY}$DETAIL"
     FOOTER="session ${SESSION_ID:0:8} · $CWD"
+    CONTRACT="$(contract_line finished)"
     ;;
 
   notification)
@@ -371,19 +413,22 @@ case "$KIND" in
     esac
     TITLE="🖐️ $REPO @ $HOST_LABEL"
     # Lead with what the chat is about, then what Claude is waiting on.
-    CONTEXT="$(session_context)"
+    session_context
     # The same first-and-last reduction the ✅ carries. The head of the message
     # was the wrong end to show here: an agent that stops on a question puts it
     # in the final line, past where 400 characters cut.
-    LAST="$(closing_words)"
-    [ -z "$LAST" ] && LAST="$(last_assistant_text 400)"
+    WAITING_ON="$(closing_words)"
+    [ -z "$WAITING_ON" ] && WAITING_ON="$(last_assistant_text 400)"
+    DETAIL="$MESSAGE"
+    ELAPSED=""; DURATION=""; CLOSING=""
     BODY=""
     [ -n "$CONTEXT" ] && BODY="$CONTEXT
 "
-    BODY="$BODY$MESSAGE"
-    [ -n "$LAST" ] && BODY="$BODY
-❯ $LAST"
+    BODY="$BODY$DETAIL"
+    [ -n "$WAITING_ON" ] && BODY="$BODY
+❯ $WAITING_ON"
     FOOTER="session ${SESSION_ID:0:8} · $CWD"
+    CONTRACT="$(contract_line needsYou)"
     ;;
 
   *)
@@ -396,10 +441,19 @@ esac
 # conversation works without leaving anything stale behind.
 should_report || exit 0
 
+# What goes on the wire: the human lines, the footer, then the contract line
+# last. The order is part of the contract, the app looks for the JSON on the
+# final line. Should jq have produced nothing, the message still goes out as
+# it always has, and the app falls back to reading the lines above.
+WIRE="$BODY
+$FOOTER"
+[ -n "${CONTRACT:-}" ] && WIRE="$WIRE
+$CONTRACT"
+
 # AGENT_INBOX_DRY_RUN prints what would be sent instead of sending it, which is
 # what makes the sender testable without a live transport.
 if [ -n "${AGENT_INBOX_DRY_RUN:-}" ]; then
-  printf 'WOULD SEND\ntitle: %s\nbody: %s\nfooter: %s\n' "$TITLE" "$BODY" "$FOOTER"
+  printf 'WOULD SEND\ntitle: %s\nbody: %s\n' "$TITLE" "$WIRE"
   exit 0
 fi
 
@@ -421,8 +475,7 @@ if [ -n "${NTFY_TOPIC:-}" ]; then
   curl -m 5 -s -o /dev/null \
     "${NTFY_AUTH[@]+"${NTFY_AUTH[@]}"}" \
     -H "Title: $TITLE" -H "Priority: $PRIO" \
-    -d "$BODY
-$FOOTER" "$NTFY_SERVER/$NTFY_TOPIC" || true
+    -d "$WIRE" "$NTFY_SERVER/$NTFY_TOPIC" || true
 fi
 
 # Remember that this session now has a row waiting, so the next prompt knows

@@ -156,9 +156,19 @@ with the HTTP code after two failed polls.
 Claude needs your permission to use Bash                    <- why it pinged
 ❯ Refunds are wired up. … Should I run the migration        <- how it ended
    against staging first?
+session 3f9a2c1e · /Users/you/my-app                        <- footer
+{"v":1,"kind":"needsYou","repo":"my-app","host":"devbox","duration":null,"elapsed":null,"summary":"Refactor the checkout flow to use the new payments SDK","ask":"ok now handle the refund path too","closing":null,"detail":"Claude needs your permission to use Bash","waitingOn":"Refunds are wired up. … Should I run the migration against staging first?","session":"3f9a2c1e","cwd":"/Users/you/my-app"}
 ```
 
-**The last line is the agent's own words, reduced to two sentences: the one that opened
+**The last line is the same message as JSON, and it is the line the app prefers.** Every field
+is named, a field with nothing in it is `null`, and `v` says which version of the shape it
+is, so the sender and the app agree on a contract instead of on conventions about which
+emoji starts which line. `kind` is `finished` for a ✅ and `needsYou` for a 🖐️; `elapsed`
+is the turn in whole seconds, `duration` the same thing as `4m 12s`, both `null` when the
+start time is unknown. The lines above it stay as they are, for the ntfy History page and
+for older apps that still parse them.
+
+**The ❯ line is the agent's own words, reduced to two sentences: the one that opened
 its answer and the one that closed it,** joined by an ellipsis. A ✅ carries the same thing
 under a 💬. It is there because a subject line stops being enough to recognise a
 conversation you left two days and several hundred thousand tokens ago, and because the

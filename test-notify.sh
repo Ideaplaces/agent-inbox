@@ -240,13 +240,16 @@ rm -f "$UT"
 CT="$(mktemp)"
 sed -n '/^# An attached screenshot/,/^}/p' "$HERE/notify.sh" > "$CT"
 sed -n '/^session_context()/,/^}/p' "$HERE/notify.sh" >> "$CT"
+# session_context sets CONTEXT rather than printing it, so the same values can
+# feed the contract line; read it back the way the sender does.
+context_of() { bash -c "source $CT; TRANSCRIPT=$1 session_context; printf '%s' \"\$CONTEXT\""; }
 
 TR="$(mktemp)"
 cat > "$TR" <<'TRANSCRIPT'
 {"type":"ai-title","aiTitle":"Menubar padding and the CI runner"}
 {"type":"user","message":{"content":[{"type":"text","text":"I think we don't get sounds."}]}}
 TRANSCRIPT
-got="$(TRANSCRIPT="$TR" bash -c "source $CT; TRANSCRIPT=$TR session_context")"
+got="$(context_of "$TR")"
 case "$got" in
   *"Menubar padding and the CI runner"*) ok "an uncompacted session still gets a subject line";;
   *) fail "an uncompacted session still gets a subject line" "got: [$got]";;
@@ -262,7 +265,7 @@ cat > "$TR" <<'TRANSCRIPT'
 {"type":"summary","summary":"the compacted summary"}
 {"type":"user","message":{"content":[{"type":"text","text":"carry on"}]}}
 TRANSCRIPT
-got="$(TRANSCRIPT="$TR" bash -c "source $CT; TRANSCRIPT=$TR session_context")"
+got="$(context_of "$TR")"
 case "$got" in
   *"the compacted summary"*) ok "a real summary still beats the title";;
   *) fail "a real summary still beats the title" "got: [$got]";;
@@ -278,7 +281,7 @@ cat > "$TR2" <<'TRANSCRIPT'
 {"type":"assistant","message":{"content":[{"type":"text","text":"working on it"}]}}
 {"type":"user","message":{"content":[{"type":"text","text":"run the full gate"}]}}
 TRANSCRIPT
-got="$(bash -c "source $CT; TRANSCRIPT=$TR2 session_context")"
+got="$(context_of "$TR2")"
 case "$got" in
   *"Why is the enum duplicated"*) ok "a transcript with no title still gets a subject";;
   *) fail "a transcript with no title still gets a subject" "got: [$got]";;
@@ -292,7 +295,7 @@ esac
 cat > "$TR2" <<'TRANSCRIPT'
 {"type":"user","message":{"content":[{"type":"text","text":"only one message so far"}]}}
 TRANSCRIPT
-got="$(bash -c "source $CT; TRANSCRIPT=$TR2 session_context")"
+got="$(context_of "$TR2")"
 count="$(printf '%s' "$got" | grep -c "only one message so far")"
 [ "$count" = "1" ] \
   && ok "a one-message session does not repeat itself" \
@@ -553,6 +556,124 @@ case "$out" in
   *"❯ It is the SDK"*" … "*) ok "the hand carries the same first-and-last reduction";;
   *) fail "the hand carries the same first-and-last reduction" "got: $out";;
 esac
+
+# --- the contract line: the same message as JSON, last, versioned ---
+#
+# Everything else in the body is convention the app has to guess at, and the
+# "$BODY💬" regression above went through the parser unnoticed because a body
+# with no subject line is still a valid body. The JSON names every field, so a
+# missing one is null rather than silently absent.
+last_line()  { printf '%s\n' "$1" | tail -1; }
+nth_last()   { printf '%s\n' "$1" | tail -n "$2" | head -1; }
+field()      { last_line "$1" | jq -r "$2"; }
+
+LONG_SID="abcdef12-3456-7890"
+new_home
+mkdir -p "$HOME/.agent-inbox/state"
+printf '%s' "$(( $(date +%s) - 252 ))" > "$HOME/.agent-inbox/state/$LONG_SID.start"
+out="$(run stop "$(printf '{"session_id":"%s","cwd":"/tmp/repo","transcript_path":"%s"}' "$LONG_SID" "$AT")")"
+if last_line "$out" | jq -e . >/dev/null 2>&1; then
+  ok "a finished turn ends with a line that parses as JSON"
+else
+  fail "a finished turn ends with a line that parses as JSON" "last line: $(last_line "$out")"
+fi
+[ "$(field "$out" .v)" = "1" ] \
+  && ok "the contract carries version 1" \
+  || fail "the contract carries version 1" "got: $(last_line "$out")"
+[ "$(field "$out" .kind)" = "finished" ] \
+  && ok "a stop event is kind finished" \
+  || fail "a stop event is kind finished" "got: $(last_line "$out")"
+[ "$(field "$out" .session)" = "${LONG_SID:0:8}" ] \
+  && ok "the session is the same eight characters the footer carries" \
+  || fail "the session is the same eight characters the footer carries" "got: $(last_line "$out")"
+[ "$(field "$out" .cwd)" = "/tmp/repo" ] \
+  && ok "the cwd is carried whole" \
+  || fail "the cwd is carried whole" "got: $(last_line "$out")"
+[ "$(field "$out" '.elapsed | type')" = "number" ] && [ "$(field "$out" .elapsed)" -ge 252 ] \
+  && ok "elapsed is a JSON number, the raw seconds behind the duration" \
+  || fail "elapsed is a JSON number, the raw seconds behind the duration" "got: $(last_line "$out")"
+case "$(field "$out" .duration)" in
+  *m*s) ok "the duration string is carried alongside it";;
+  *) fail "the duration string is carried alongside it" "got: $(last_line "$out")";;
+esac
+[ "$(field "$out" .summary)" = "The menubar padding" ] \
+  && ok "the summary is the subject line, trimmed" \
+  || fail "the summary is the subject line, trimmed" "got: $(last_line "$out")"
+[ "$(field "$out" .waitingOn)" = "null" ] && [ "$(field "$out" .detail)" = "null" ] \
+  && ok "a finished turn has no waitingOn and no detail, as null" \
+  || fail "a finished turn has no waitingOn and no detail, as null" "got: $(last_line "$out")"
+
+# The human lines and the footer stay, in their order, above it: the History
+# page and older apps read those.
+[ "$(nth_last "$out" 2)" = "session ${LONG_SID:0:8} · /tmp/repo" ] \
+  && ok "the footer is the line before the contract" \
+  || fail "the footer is the line before the contract" "got: $(nth_last "$out" 2)"
+case "$(nth_last "$out" 3)" in
+  "💬 It is the SDK"*) ok "and the human lines come before the footer";;
+  *) fail "and the human lines come before the footer" "got: $(nth_last "$out" 3)";;
+esac
+
+# A hand: kind needsYou, the hook's message as detail, no duration at all.
+new_home
+out="$(run notification "$(printf '{"session_id":"%s","cwd":"/tmp/repo","transcript_path":"%s","message":"Claude needs your permission to use Bash"}' "$LONG_SID" "$AT")")"
+[ "$(field "$out" .kind)" = "needsYou" ] \
+  && ok "a notification event is kind needsYou" \
+  || fail "a notification event is kind needsYou" "got: $(last_line "$out")"
+[ "$(field "$out" .detail)" = "Claude needs your permission to use Bash" ] \
+  && ok "the hook's message is the detail" \
+  || fail "the hook's message is the detail" "got: $(last_line "$out")"
+case "$(field "$out" .waitingOn)" in
+  "It is the SDK"*) ok "the agent's closing line is what it is waiting on";;
+  *) fail "the agent's closing line is what it is waiting on" "got: $(last_line "$out")";;
+esac
+[ "$(field "$out" .duration)" = "null" ] && [ "$(field "$out" .elapsed)" = "null" ] && [ "$(field "$out" .closing)" = "null" ] \
+  && ok "a hand carries no duration, no elapsed and no closing, as null" \
+  || fail "a hand carries no duration, no elapsed and no closing, as null" "got: $(last_line "$out")"
+
+# No start time: the duration is null, not "" and not "unknown".
+new_home
+out="$(run stop "$(printf '{"session_id":"%s","cwd":"/tmp/repo","transcript_path":"%s"}' "$LONG_SID" "$AT")")"
+[ "$(field "$out" .duration)" = "null" ] && [ "$(field "$out" .elapsed)" = "null" ] \
+  && ok "an unknown start time is a null duration and a null elapsed" \
+  || fail "an unknown start time is a null duration and a null elapsed" "got: $(last_line "$out")"
+
+# The reason jq builds the line: the agent's own words carry quotes and
+# backslashes, and the raw fallback carries newlines too. Hand-built JSON
+# breaks on the first of them.
+cat > "$AT" <<'TRANSCRIPT'
+{"type":"user","message":{"content":[{"type":"text","text":"fix the path"}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"He said \"done\" and wrote C:\\temp\\x.\nThen it worked out fine in the end."}]}}
+TRANSCRIPT
+new_home
+out="$(run stop "$(printf '{"session_id":"%s","cwd":"/tmp/repo","transcript_path":"%s"}' "$LONG_SID" "$AT")")"
+[ "$(field "$out" .closing)" = 'He said "done" and wrote C:\temp\x. … Then it worked out fine in the end.' ] \
+  && ok "quotes and backslashes in the closing words round-trip" \
+  || fail "quotes and backslashes in the closing words round-trip" "got: $(last_line "$out")"
+
+printf '{"type":"assistant","message":{"content":[{"type":"text","text":"```\\necho \\"a\\\\b\\"\\nls\\n```"}]}}\n' > "$AT"
+out="$(run stop "$(printf '{"session_id":"%s","cwd":"/tmp/repo","transcript_path":"%s"}' "$LONG_SID" "$AT")")"
+expected="$(printf '```\necho "a\\b"\nls\n```')"
+[ "$(field "$out" .detail)" = "$expected" ] \
+  && ok "a newline in the raw fallback round-trips through detail" \
+  || fail "a newline in the raw fallback round-trips through detail" "got: $(last_line "$out")"
+[ "$(field "$out" .closing)" = "null" ] \
+  && ok "and the closing is null when there was no prose to reduce" \
+  || fail "and the closing is null when there was no prose to reduce" "got: $(last_line "$out")"
+
+# The same line goes over the wire, not only in dry run, and the control
+# event, which is an instruction and not a message, never carries one.
+stub_curl_home
+send_for_real stop "$(printf '{"session_id":"%s","cwd":"/tmp/repo"}' "$SID")"
+[ "$(grep -c '"v":1' "$CURL_ARGS")" = "1" ] \
+  && ok "the contract line is posted with the message" \
+  || fail "the contract line is posted with the message" "args: $(tr '\n' ' ' < "$CURL_ARGS")"
+: > "$CURL_ARGS"
+send_for_real prompt "$(prompt_payload 'carry on then')"
+if grep -qx "clear ${SID:0:8}" "$CURL_ARGS" && ! grep -q '"v":1' "$CURL_ARGS"; then
+  ok "a control event carries no contract line"
+else
+  fail "a control event carries no contract line" "args: $(tr '\n' ' ' < "$CURL_ARGS")"
+fi
 
 rm -f "$CW" "$AT"
 
