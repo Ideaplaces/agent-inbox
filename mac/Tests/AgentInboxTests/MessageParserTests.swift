@@ -370,3 +370,35 @@ final class ItemThreadTests: XCTestCase {
         XCTAssertNil(item(summary: "s", ask: "a", closing: "").closingWords)
     }
 }
+
+/// Every turn reports by default so a new install can see that it works. The
+/// row for a very short turn is where the person then learns the floor exists,
+/// so the offer has to appear on exactly those rows and no others.
+final class ShortTurnTests: XCTestCase {
+    private func item(kind: ItemKind, elapsed: Int?) -> InboxItem {
+        InboxItem(
+            id: "1", kind: kind, repo: "r", host: "h", duration: nil, elapsed: elapsed,
+            summary: nil, ask: nil, detail: nil, closing: nil, waitingOn: nil,
+            sessionID: nil, cwd: nil, receivedAt: Date(), presenceAtArrival: 0)
+    }
+
+    func testAQuickFinishedTurnGetsTheOffer() {
+        XCTAssertTrue(item(kind: .finished, elapsed: 3).isShortTurn)
+        XCTAssertTrue(item(kind: .finished, elapsed: InboxItem.shortTurnSeconds - 1).isShortTurn)
+    }
+
+    func testATurnAtTheThresholdDoesNot() {
+        XCTAssertFalse(item(kind: .finished, elapsed: InboxItem.shortTurnSeconds).isShortTurn)
+        XCTAssertFalse(item(kind: .finished, elapsed: 999).isShortTurn)
+    }
+
+    /// An older sender sends no elapsed time. Unknown is not short.
+    func testAnUnknownDurationIsNeverCalledShort() {
+        XCTAssertFalse(item(kind: .finished, elapsed: nil).isShortTurn)
+    }
+
+    /// The hand is a block, not a turn; its duration means nothing here.
+    func testANeedsYouItemIsNeverCalledShort() {
+        XCTAssertFalse(item(kind: .needsYou, elapsed: 2).isShortTurn)
+    }
+}

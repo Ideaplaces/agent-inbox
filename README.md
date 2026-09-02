@@ -191,6 +191,9 @@ the first thing anyone does after installing. If every turn is too chatty, raise
 applies to the machine you set it on: every machine keeps its own `~/.agent-inbox/config`,
 so a dev box you report from needs its own.
 
+A turn under fifteen seconds says so on its own row, with a link into Settings, so the
+floor is discovered on exactly the row that made you wonder about it.
+
 **Settings are a page inside the menu, not a window.** Click the gear and the popover shows
 them, with a way back. This is deliberate: a separate Settings window opens wherever macOS
 decides to put it, which on a Mac driving a full-screen app is another Space, so the click

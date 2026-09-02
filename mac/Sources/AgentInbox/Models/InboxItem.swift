@@ -103,6 +103,19 @@ struct InboxItem: Codable, Identifiable, Equatable {
     /// answer to that, so a closing folded into it would never once be drawn.
     /// This is the line that tells two long sessions apart, which is exactly
     /// the case where the subject line has stopped being enough.
+    /// Under this many seconds, a finished turn gets a line offering to hide
+    /// turns that short. Every turn reports by default so a new install can see
+    /// that it works; this is how the person then learns the floor exists,
+    /// on the very row that made them wonder.
+    static let shortTurnSeconds = 15
+
+    /// A finished turn quick enough to offer hiding. Unknown durations are not
+    /// short: an older sender that sends no elapsed time should not be nagged.
+    var isShortTurn: Bool {
+        guard kind == .finished, let elapsed else { return false }
+        return elapsed < Self.shortTurnSeconds
+    }
+
     var closingWords: String? {
         guard let closing, !closing.isEmpty, closing != subtitle else { return nil }
         return closing

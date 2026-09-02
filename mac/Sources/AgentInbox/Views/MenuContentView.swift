@@ -307,6 +307,17 @@ private struct ItemRow: View {
                         .lineLimit(4)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                if item.isShortTurn {
+                    HStack(spacing: 4) {
+                        Text("A \(item.elapsed ?? 0)s turn. Turns this short can be hidden in")
+                            .note(.tertiary)
+                        // Styled on its own, or it inherits the note's grey and
+                        // stops looking like something you can click.
+                        Button("Settings") { model.menuRoute = .settings }
+                            .buttonStyle(.link)
+                            .font(.system(size: 10))
+                    }
+                }
                 if let waiting = item.waitingOn {
                     Text(MarkdownText.attributed(waiting))
                         .font(.system(size: 12))

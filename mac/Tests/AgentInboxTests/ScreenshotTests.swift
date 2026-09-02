@@ -121,13 +121,22 @@ final class ScreenshotTests: XCTestCase {
         [
             InboxItem(
                 id: "1", kind: .finished, repo: "marketing-site", host: "laptop",
-                duration: "4m 12s",
+                duration: "4m 12s", elapsed: 252,
                 summary: "Rewrite the pricing page copy",
                 ask: "make the middle tier the obvious pick",
                 detail: nil,
                 closing: "Pricing page rewritten, and the comparison table now marks the middle tier as recommended. … Left the annual toggle alone, since you did not ask for it.",
                 waitingOn: nil, sessionID: "e5f6a7b8", cwd: "/Users/you/marketing-site",
                 receivedAt: Date(timeIntervalSince1970: 1_700_000_600), presenceAtArrival: 0),
+            // A turn short enough that the row offers to hide turns like it.
+            InboxItem(
+                id: "3", kind: .finished, repo: "docs-site", host: "laptop",
+                duration: "0m 4s", elapsed: 4,
+                summary: "Fix the broken anchor links",
+                ask: "are you still there?",
+                detail: nil, closing: "Still here. Nothing left to do on the anchors.",
+                waitingOn: nil, sessionID: "c9d0e1f2", cwd: "/Users/you/docs-site",
+                receivedAt: Date(timeIntervalSince1970: 1_700_000_300), presenceAtArrival: 0),
             InboxItem(
                 id: "2", kind: .needsYou, repo: "checkout-api", host: "devbox",
                 duration: nil,
