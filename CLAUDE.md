@@ -103,6 +103,45 @@ docs.ideaplaces.com/devops/macos-app-signing.
   one, checked against a third-party DMG as a control before trusting the
   reading. `icon size` and the window bounds do read back correctly, so verify
   what can be verified and have a person look at the rest.
+- **The wire has a contract now, and two ways a message can reach the parser.**
+  `notify.sh` appends a versioned JSON line after the human lines and the old
+  footer. `Transport.splitFooter` peels the last body line only if it looks
+  like a footer, so normally the JSON stays in the body and the footer arrives
+  inside it; but if any contract string contains ` · /`, `splitFooter` peels the
+  JSON into `message.footer` instead. `MessageParser` checks both places.
+  Anyone rewriting `splitFooter` needs to keep both arrangements working, and
+  `MessageParser.peelFooter` duplicates its two conditions on purpose so the
+  model layer does not import the transport: change one, change both.
+- **A contract with a null or unknown `kind` falls back whole.** Half-applying
+  a contract is worse than ignoring it, so the parser drops to the emoji
+  heuristics for the entire message rather than filling what it can.
+- **`closing_words` never contains a newline.** Line ends are sentence ends by
+  design. A test asserting a newline survives through `.closing` will fail on
+  the reduction, not on jq.
+- **`HOST_LABEL` in the environment is ignored.** `notify.sh` assigns
+  `hostname -s` unconditionally before sourcing config, so only
+  `~/.agent-inbox/config` can set it. `HOST_LABEL=x ./notify.sh` does nothing.
+- **The dry-run output has no `footer:` line any more.** The footer is the
+  second-to-last body line and the JSON contract the last. `tail -1` of a dry
+  run is the contract.
+- **Backoff after a failure starts at 2s, not 1s.** `consecutiveFailures` is
+  incremented before the sleep, so the ladder after failures is 2, 4, 8, 16,
+  32, 60. `backoff(0)`, one second, is the wait after a healthy stream closes.
+  Pinned in `ReceiverTests`; change the loop and the test together.
+- **The receiver's watchdog ends the connection; it used to only flag it.** The
+  first streaming build set a flag at ten seconds but stayed inside the
+  `for try await` until URLSession's 120s idle timeout threw, so the poll
+  fallback began after two minutes, not ten seconds. Nothing caught it because
+  nothing could: the loop called `Task.sleep` directly. Making time injectable
+  (`Sleeper`) is what surfaced it. Stream and watchdog are now siblings in a
+  task group and the first to finish decides.
+- **`receiver.restart()` no longer restarts housekeeping.** Reconnect and topic
+  changes cycle the connection only; presence and expiry keep their own clock.
+- **In receiver tests, settle on the last effect in the chain, not the first.**
+  `settle(until:)` returns when its condition holds; state set one hop later
+  may not be there yet. And two sleeps woken by one `advance` resume in
+  deadline order, but the main actor does not promise to run them in that
+  order, so never assert cross-task ordering off a single advance.
 - **Test the binary you think you are testing.** A `--configure` flag appeared to
   hang through several rounds of debugging because `/Applications` held the
   released build, which predated the flag.

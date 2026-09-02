@@ -369,8 +369,8 @@ it takes to cross the network, and there is no interval to choose.
 Reconnecting is the whole design. The connection is expected to drop, on a sleep, a network
 change, or a server restart, and none of those are errors. The Mac reconnects and asks for
 everything since the last message it saw, so a lid closed for a day opens with the backlog
-rather than a hole. Waiting doubles from one second to a minute, so a server that is down is
-not hammered and a blip costs a second. Waking the Mac reconnects at once rather than
+rather than a hole. Waiting doubles, from a couple of seconds up to a minute, so a server
+that is down is not hammered and a blip costs seconds. Waking the Mac reconnects at once rather than
 waiting out the backoff.
 
 **There is one failure this has to catch on purpose.** A proxy that buffers responses will

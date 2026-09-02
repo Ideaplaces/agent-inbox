@@ -84,12 +84,19 @@ Sources/AgentInbox/
 │   └── Keychain.swift
 ├── Transport/                 ntfy, stateless
 ├── Services/
-│   ├── Poller.swift           the loop, cursors, connection status
+│   ├── Receiver.swift         the held-open connection: reconnect, watchdog, cursors, status
+│   ├── MessagePipeline.swift  wire-order application of items and control events
+│   ├── Housekeeping.swift     presence and expiry on their own clock
+│   ├── UsageReporter.swift    anonymous daily counts, off unless opted in
+│   ├── Sleeper.swift          every wait and every "now", so the above can be tested
+│   ├── Analytics.swift        the one event a day and its fixed key list
 │   ├── Presence.swift         time actually spent at the keyboard
+│   ├── LoginItem.swift        open at login, on by first launch
 │   ├── HookInstaller.swift    safe edits to ~/.claude/settings.json
 │   ├── SenderConfig.swift     the ~/.agent-inbox contract with the bash senders
 │   └── Notifier.swift
-└── Views/                     menu, welcome, settings
+├── Views/                     menu (with settings as a page), welcome, shared controls
+└── dmg/                       the installer window: layout and background, generated and committed
 Scripts/make-icon.swift        renders the app icon; no binary asset is committed
 ```
 
