@@ -29,8 +29,12 @@ enum ItemKind: String, Codable {
     }
 }
 
-/// A parsed agent event. The senders encode everything in a title line, a body
-/// of prefixed lines, and a footer, so the shapes below mirror `notify.sh`:
+/// A parsed agent event. A current sender ends the body with one line of
+/// JSON, the versioned contract in `WireContract`, and the item is built from
+/// that line alone. Everything above it is there for a human reading the raw
+/// notification, and for the app when the JSON is missing: an older sender
+/// stops at the footer, and then the prefixed lines are what gets parsed, so
+/// the shapes below still mirror `notify.sh`:
 ///
 ///     🖐️ my-app @ devbox                     <- title
 ///     🧵 Refactor the checkout flow          <- summary
@@ -40,12 +44,17 @@ enum ItemKind: String, Codable {
 ///     Claude needs your permission to ...    <- detail
 ///     ❯ Should I run the migration first?    <- waitingOn
 ///     session a1b2c3d4 · /Users/me/my-app    <- footer
+///     {"v":1,"kind":"needsYou","repo":...}   <- contract, wins when present
 struct InboxItem: Codable, Identifiable, Equatable {
     var id: String
     var kind: ItemKind
     var repo: String
     var host: String
     var duration: String?
+    /// `duration` in seconds. Sent by a current sender; derived from
+    /// `duration` for an older one, which is why both exist. Defaulted so an
+    /// `items.json` written before it existed still decodes.
+    var elapsed: Int? = nil
     var summary: String?
     var ask: String?
     var detail: String?
@@ -100,6 +109,49 @@ struct InboxItem: Codable, Identifiable, Equatable {
     }
 }
 
+/// The last line of a current sender's body: one line of compact JSON that
+/// carries every field the app shows, already separated. The prefixed lines
+/// above it are for people; this is for the parser, so a sender can change
+/// how the human lines read without the app losing a field.
+///
+/// `v` is the version and is checked, not trusted: a line from a version this
+/// app does not know is ignored whole, and the human lines are read instead.
+/// Every field but `kind` may be null, which decodes to nil.
+struct WireContract: Decodable {
+    static let version = 1
+    static let prefix = "{\"v\":"
+
+    let v: Int
+    let kind: ItemKind
+    let repo: String?
+    let host: String?
+    let duration: String?
+    let elapsed: Int?
+    let summary: String?
+    let ask: String?
+    let closing: String?
+    let detail: String?
+    let waitingOn: String?
+    let session: String?
+    let cwd: String?
+
+    /// nil for anything that is not a contract this app speaks, which is the
+    /// signal to fall back rather than an error: the message is still usable.
+    static func decode(_ line: String) -> WireContract? {
+        guard line.hasPrefix(prefix),
+              let contract = try? JSONDecoder().decode(WireContract.self, from: Data(line.utf8)),
+              contract.v == version
+        else { return nil }
+        return contract
+    }
+}
+
+/// Which half of the parser produced an item.
+enum ParseOutcome: Equatable {
+    case contract
+    case fallback
+}
+
 enum MessageParser {
     /// "🖐️ my-app @ devbox (4m 19s)" -> kind, repo, host, duration
     static func parseTitle(_ title: String) -> (kind: ItemKind, repo: String, host: String, duration: String?)? {
@@ -147,9 +199,107 @@ enum MessageParser {
         return (session, right.hasPrefix("/") ? right : nil)
     }
 
+    /// "4m 12s" -> 252. Only the shape `notify.sh` prints, minutes unbounded;
+    /// "unknown" and anything else is nil rather than a guess.
+    static func seconds(fromDuration duration: String?) -> Int? {
+        guard let duration else { return nil }
+        let parts = duration.split(separator: " ", omittingEmptySubsequences: false)
+        guard parts.count == 2,
+              parts[0].hasSuffix("m"), parts[1].hasSuffix("s"),
+              let minutes = Int(parts[0].dropLast()), minutes >= 0,
+              let seconds = Int(parts[1].dropLast()), seconds >= 0
+        else { return nil }
+        return minutes * 60 + seconds
+    }
+
     static func parse(_ message: TransportMessage, presence: Int) -> InboxItem? {
+        parseWithOutcome(message, presence: presence).item
+    }
+
+    /// The contract line when there is one, and the conventions when there is
+    /// not. `outcome` says which, so a test can tell "the contract was read"
+    /// from "the contract was ignored and the lines above it happened to say
+    /// the same thing".
+    ///
+    /// The contract line can reach here in two places. `Transport.splitFooter`
+    /// peels the last line of the body when it looks like a footer, and the
+    /// JSON line normally does not, so it stays last in the body and the human
+    /// footer stays above it. But a contract string that contains " · /" makes
+    /// the JSON line look like a footer, and then it arrives in
+    /// `message.footer` with the human footer still last in the body. Both
+    /// arrangements are read; nothing about the split is assumed.
+    static func parseWithOutcome(
+        _ message: TransportMessage, presence: Int
+    ) -> (item: InboxItem?, outcome: ParseOutcome) {
+        if message.footer.hasPrefix(WireContract.prefix) {
+            if let contract = WireContract.decode(message.footer) {
+                return (item(from: contract, message: message, presence: presence), .contract)
+            }
+            // The footer slot holds a contract the app cannot read, so the real
+            // footer is still the last line of the body.
+            let (body, footer) = peelFooter(message.body)
+            return (fallback(message, body: body, footer: footer, presence: presence), .fallback)
+        }
+
+        let lines = message.body.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var end = lines.count
+        while end > 0, lines[end - 1].trimmingCharacters(in: .whitespaces).isEmpty { end -= 1 }
+        if end > 0, lines[end - 1].hasPrefix(WireContract.prefix) {
+            if let contract = WireContract.decode(lines[end - 1]) {
+                return (item(from: contract, message: message, presence: presence), .contract)
+            }
+            // A contract from a version this app does not speak, or one cut
+            // short in transit. It must not end up in `detail`, and the footer
+            // it hid from `splitFooter` must still become session and cwd.
+            let rest = lines[..<(end - 1)].joined(separator: "\n")
+            let (body, footer) = message.footer.isEmpty ? peelFooter(rest) : (rest, message.footer)
+            return (fallback(message, body: body, footer: footer, presence: presence), .fallback)
+        }
+
+        return (fallback(message, body: message.body, footer: message.footer, presence: presence), .fallback)
+    }
+
+    private static func item(
+        from contract: WireContract, message: TransportMessage, presence: Int
+    ) -> InboxItem {
+        InboxItem(
+            id: message.id,
+            kind: contract.kind,
+            repo: contract.repo ?? "",
+            host: contract.host ?? "",
+            duration: contract.duration,
+            elapsed: contract.elapsed ?? seconds(fromDuration: contract.duration),
+            summary: contract.summary,
+            ask: contract.ask,
+            detail: contract.detail,
+            closing: contract.closing,
+            waitingOn: contract.waitingOn,
+            sessionID: contract.session,
+            cwd: contract.cwd,
+            receivedAt: message.date,
+            presenceAtArrival: presence
+        )
+    }
+
+    /// The same two tests as `Transport.splitFooter`, for a body the transport
+    /// did not split because the contract line was standing in the footer's
+    /// place. Kept separate rather than shared so the transport's split, which
+    /// every older message depends on, is not touched.
+    private static func peelFooter(_ text: String) -> (body: String, footer: String) {
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        guard let last = lines.last,
+              last.hasPrefix("session ") || last.contains(" · /")
+        else { return (text, "") }
+        return (lines.dropLast().joined(separator: "\n"), last)
+    }
+
+    /// The conventions an older sender relies on: title parsed on " @ " and a
+    /// trailing "(...)", body lines by their prefix, footer on " · ".
+    private static func fallback(
+        _ message: TransportMessage, body: String, footer: String, presence: Int
+    ) -> InboxItem? {
         guard let head = parseTitle(message.title) else { return nil }
-        let foot = parseFooter(message.footer)
+        let foot = parseFooter(footer)
 
         var summary: String?
         var ask: String?
@@ -157,7 +307,7 @@ enum MessageParser {
         var waitingOn: String?
         var detailLines: [String] = []
 
-        for raw in message.body.split(separator: "\n", omittingEmptySubsequences: false) {
+        for raw in body.split(separator: "\n", omittingEmptySubsequences: false) {
             let line = String(raw).trimmingCharacters(in: .whitespaces)
             if line.isEmpty { continue }
             if line.hasPrefix("🧵") {
@@ -179,6 +329,7 @@ enum MessageParser {
             repo: head.repo,
             host: head.host,
             duration: head.duration,
+            elapsed: seconds(fromDuration: head.duration),
             summary: summary,
             ask: ask,
             detail: detailLines.isEmpty ? nil : detailLines.joined(separator: "\n"),

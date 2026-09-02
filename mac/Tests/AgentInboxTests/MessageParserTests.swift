@@ -115,6 +115,199 @@ final class MessageParserTests: XCTestCase {
         XCTAssertEqual(footer, "")
     }
 
+    // MARK: - The contract line
+
+    /// The body as `splitFooter` normally hands it over: the JSON line is last
+    /// and does not look like a footer, so the human footer stays in the body
+    /// and `footer` is empty.
+    private static let humanLines = """
+    🧵 Refactor the checkout flow to use the new payments SDK
+    🗣 ok now handle the refund path too
+    💬 Refunds are wired up end to end. … Want me to run it against staging?
+    Claude needs your permission to use Bash
+    ❯ Should I run the migration against staging first?
+    session a1b2c3d4 · /home/me/checkout
+    """
+
+    /// Every value differs from the line above it, so a field that came from
+    /// the human lines instead of the JSON fails an assertion rather than
+    /// passing by coincidence.
+    private static let contractLine =
+        #"{"v":1,"kind":"finished","repo":"billing","host":"laptop","duration":"4m 12s","elapsed":252,"# +
+        #""summary":"Rework the refund ledger","ask":"and the chargeback path","# +
+        #""closing":"Chargebacks post. … Ship it?","detail":"Claude needs your permission to use Edit","# +
+        #""waitingOn":"Run the backfill now?","session":"ffff0000","cwd":"/srv/billing"}"#
+
+    private func message(body: String, footer: String = "") -> TransportMessage {
+        TransportMessage(
+            id: "42", title: "🖐️ checkout @ devbox", body: body, footer: footer,
+            date: Date(timeIntervalSince1970: 1_700_000_000))
+    }
+
+    func testContractLineWinsOverEveryHumanLine() throws {
+        let parsed = MessageParser.parseWithOutcome(
+            message(body: Self.humanLines + "\n" + Self.contractLine), presence: 120)
+        XCTAssertEqual(parsed.outcome, .contract)
+        let item = try XCTUnwrap(parsed.item)
+        XCTAssertEqual(item.kind, .finished)
+        XCTAssertEqual(item.repo, "billing")
+        XCTAssertEqual(item.host, "laptop")
+        XCTAssertEqual(item.duration, "4m 12s")
+        XCTAssertEqual(item.elapsed, 252)
+        XCTAssertEqual(item.summary, "Rework the refund ledger")
+        XCTAssertEqual(item.ask, "and the chargeback path")
+        XCTAssertEqual(item.closing, "Chargebacks post. … Ship it?")
+        XCTAssertEqual(item.detail, "Claude needs your permission to use Edit")
+        XCTAssertEqual(item.waitingOn, "Run the backfill now?")
+        XCTAssertEqual(item.sessionID, "ffff0000")
+        XCTAssertEqual(item.cwd, "/srv/billing")
+        XCTAssertEqual(item.presenceAtArrival, 120)
+        XCTAssertEqual(item.receivedAt, Date(timeIntervalSince1970: 1_700_000_000))
+    }
+
+    /// A contract string containing " · /" makes `splitFooter` peel the JSON
+    /// line into `footer` and leave the human footer last in the body. The
+    /// parser must find the contract there too.
+    func testContractLinePeeledIntoFooterIsStillRead() throws {
+        let line = Self.contractLine.replacingOccurrences(
+            of: "Rework the refund ledger", with: "Rework · /ledger")
+        let (body, footer) = NtfyTransport.splitFooter(Self.humanLines + "\n" + line)
+        XCTAssertEqual(footer, line, "precondition: the transport peeled the JSON line")
+
+        let parsed = MessageParser.parseWithOutcome(message(body: body, footer: footer), presence: 0)
+        XCTAssertEqual(parsed.outcome, .contract)
+        let item = try XCTUnwrap(parsed.item)
+        XCTAssertEqual(item.summary, "Rework · /ledger")
+        XCTAssertEqual(item.repo, "billing")
+        XCTAssertEqual(item.sessionID, "ffff0000")
+        XCTAssertEqual(item.cwd, "/srv/billing")
+        XCTAssertEqual(item.detail, "Claude needs your permission to use Edit")
+    }
+
+    /// The same body without the JSON line is what an older sender produces,
+    /// and it must parse exactly as `testParsesFullNotificationMessage` does.
+    func testBodyWithoutContractLineFallsBackToTheConventions() throws {
+        let (body, footer) = NtfyTransport.splitFooter(Self.humanLines)
+        let parsed = MessageParser.parseWithOutcome(message(body: body, footer: footer), presence: 120)
+        XCTAssertEqual(parsed.outcome, .fallback)
+        let item = try XCTUnwrap(parsed.item)
+        XCTAssertEqual(item.kind, .needsYou)
+        XCTAssertEqual(item.repo, "checkout")
+        XCTAssertEqual(item.host, "devbox")
+        XCTAssertNil(item.duration)
+        XCTAssertNil(item.elapsed)
+        XCTAssertEqual(item.summary, "Refactor the checkout flow to use the new payments SDK")
+        XCTAssertEqual(item.ask, "ok now handle the refund path too")
+        XCTAssertEqual(item.detail, "Claude needs your permission to use Bash")
+        XCTAssertEqual(
+            item.closing, "Refunds are wired up end to end. … Want me to run it against staging?")
+        XCTAssertEqual(item.waitingOn, "Should I run the migration against staging first?")
+        XCTAssertEqual(item.sessionID, "a1b2c3d4")
+        XCTAssertEqual(item.cwd, "/home/me/checkout")
+        XCTAssertEqual(item.subtitle, "ok now handle the refund path too")
+    }
+
+    /// A version this app does not speak, and a line cut short in transit.
+    /// Both fall back, the JSON lands in no field, and the human footer the
+    /// JSON line hid from `splitFooter` still becomes session and cwd.
+    func testUnreadableContractLineFallsBackWithoutLeakingIntoDetail() throws {
+        let broken = [
+            Self.contractLine.replacingOccurrences(of: #"{"v":1,"#, with: #"{"v":2,"#),
+            #"{"v":1,"kind":"fin"#,
+        ]
+        for line in broken {
+            let (body, footer) = NtfyTransport.splitFooter(Self.humanLines + "\n" + line)
+            XCTAssertEqual(footer, "", "precondition: the JSON line does not look like a footer")
+
+            let parsed = MessageParser.parseWithOutcome(message(body: body, footer: footer), presence: 0)
+            XCTAssertEqual(parsed.outcome, .fallback, line)
+            let item = try XCTUnwrap(parsed.item, line)
+            XCTAssertEqual(item.kind, .needsYou, line)
+            XCTAssertEqual(item.repo, "checkout", line)
+            XCTAssertEqual(item.detail, "Claude needs your permission to use Bash", line)
+            XCTAssertEqual(item.summary, "Refactor the checkout flow to use the new payments SDK", line)
+            XCTAssertEqual(item.waitingOn, "Should I run the migration against staging first?", line)
+            XCTAssertEqual(item.sessionID, "a1b2c3d4", line)
+            XCTAssertEqual(item.cwd, "/home/me/checkout", line)
+            for field in [item.summary, item.ask, item.closing, item.detail, item.waitingOn, item.cwd] {
+                XCTAssertFalse((field ?? "").contains(#"{"v":"#), "\(line) leaked into \(field ?? "")")
+                XCTAssertFalse((field ?? "").contains("session a1b2c3d4"), "footer leaked into \(field ?? "")")
+            }
+        }
+    }
+
+    /// The same unreadable contract, but one that `splitFooter` peeled into
+    /// `footer` because it contains " · /". The human footer is then still
+    /// last in the body and has to be peeled by the parser.
+    func testUnreadableContractInFooterSlotStillYieldsSessionAndCwd() throws {
+        let line = #"{"v":2,"kind":"finished","summary":"a · /b"}"#
+        let (body, footer) = NtfyTransport.splitFooter(Self.humanLines + "\n" + line)
+        XCTAssertEqual(footer, line, "precondition: the transport peeled the JSON line")
+
+        let parsed = MessageParser.parseWithOutcome(message(body: body, footer: footer), presence: 0)
+        XCTAssertEqual(parsed.outcome, .fallback)
+        let item = try XCTUnwrap(parsed.item)
+        XCTAssertEqual(item.sessionID, "a1b2c3d4")
+        XCTAssertEqual(item.cwd, "/home/me/checkout")
+        XCTAssertEqual(item.detail, "Claude needs your permission to use Bash")
+    }
+
+    func testNullContractFieldsDecodeToNil() throws {
+        let line = #"{"v":1,"kind":"needsYou","repo":"r","host":"h","duration":null,"elapsed":null,"# +
+            #""summary":null,"ask":null,"closing":null,"detail":null,"waitingOn":null,"session":null,"cwd":null}"#
+        let parsed = MessageParser.parseWithOutcome(message(body: "🧵 ignored\n" + line), presence: 0)
+        XCTAssertEqual(parsed.outcome, .contract)
+        let item = try XCTUnwrap(parsed.item)
+        XCTAssertEqual(item.kind, .needsYou)
+        XCTAssertEqual(item.repo, "r")
+        XCTAssertEqual(item.host, "h")
+        XCTAssertNil(item.duration)
+        XCTAssertNil(item.elapsed)
+        XCTAssertNil(item.summary)
+        XCTAssertNil(item.ask)
+        XCTAssertNil(item.closing)
+        XCTAssertNil(item.detail)
+        XCTAssertNil(item.waitingOn)
+        XCTAssertNil(item.sessionID)
+        XCTAssertNil(item.cwd)
+    }
+
+    func testElapsedIsDerivedFromDurationWhenTheContractLacksIt() throws {
+        let line = #"{"v":1,"kind":"finished","repo":"r","host":"h","duration":"16m 39s","elapsed":null}"#
+        let item = try XCTUnwrap(MessageParser.parse(message(body: line), presence: 0))
+        XCTAssertEqual(item.duration, "16m 39s")
+        XCTAssertEqual(item.elapsed, 999)
+    }
+
+    /// An older sender carries the duration only in the title.
+    func testElapsedIsDerivedFromTheTitleForAnOlderSender() throws {
+        let message = TransportMessage(
+            id: "7", title: "✅ ideaplaces-devops @ mac (4m 19s)", body: "🧵 a thing",
+            footer: "session a1b2c3d4 · /Users/me/repo", date: Date())
+        let parsed = MessageParser.parseWithOutcome(message, presence: 0)
+        XCTAssertEqual(parsed.outcome, .fallback)
+        let item = try XCTUnwrap(parsed.item)
+        XCTAssertEqual(item.duration, "4m 19s")
+        XCTAssertEqual(item.elapsed, 259)
+    }
+
+    func testSecondsFromDuration() {
+        XCTAssertEqual(MessageParser.seconds(fromDuration: "4m 12s"), 252)
+        XCTAssertEqual(MessageParser.seconds(fromDuration: "0m 3s"), 3)
+        XCTAssertEqual(MessageParser.seconds(fromDuration: "16m 39s"), 999)
+        XCTAssertNil(MessageParser.seconds(fromDuration: "unknown"))
+        XCTAssertNil(MessageParser.seconds(fromDuration: nil))
+    }
+
+    func testWireContractDecodeRejectsWhatItDoesNotSpeak() {
+        XCTAssertNotNil(WireContract.decode(Self.contractLine))
+        XCTAssertNil(WireContract.decode(#"{"v":2,"kind":"finished"}"#))
+        XCTAssertNil(WireContract.decode(#"{"v":1,"kind":"fin"#))
+        XCTAssertNil(WireContract.decode(#"{"v":1,"kind":"exploded"}"#), "an unknown kind is not a row")
+        XCTAssertNil(WireContract.decode(#"{"kind":"finished","v":1}"#), "the prefix is part of the contract")
+        XCTAssertNil(WireContract.decode("session a1b2c3d4 · /Users/me/repo"))
+    }
+
 }
 
 /// The subject line reached the app and the menu threw it away.
