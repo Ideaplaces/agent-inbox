@@ -136,7 +136,11 @@ final class AppSettings {
             "ntfyServer": AppSettings.publicNtfyServer,
             "expireMinutes": 5,
             "idleThreshold": 90,
-            "minSeconds": 45,
+            // Zero: every turn reports. Someone who just installed says "hello"
+            // to an agent to see whether this works, and a 45-second floor
+            // turns that first test into silence. The floor is a visible
+            // setting now, so anyone who finds every turn too chatty raises it.
+            "minSeconds": 0,
             "watchMode": "all",
             "watchTags": AppSettings.defaultWatchTags,
             "muteTag": AppSettings.defaultMuteTag,
