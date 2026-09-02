@@ -333,8 +333,7 @@ running as another user can read it, so the token lives in `~/.agent-inbox/ntfy-
 
 These are sender-side only, and the app writes them itself so the two can never disagree,
 including `MIN_SECONDS`, which **Settings → General → Report turns longer than** writes
-here. Poll interval, sound, expiry, idle threshold and usage sharing are app-side and live in
-Settings. Usage sharing is deliberately not in this file: the senders never report anything,
+here. Sound, expiry, idle threshold and usage sharing are app-side and live in Settings. Usage sharing is deliberately not in this file: the senders never report anything,
 so there would be nothing for them to read.
 Notifications play **Pop** by default; **Settings → General → Sound** changes it, and
 `Silent` turns it off.
@@ -347,6 +346,26 @@ as enabled, so nothing in the app can warn you about it.
 Runtime state also lives in `~/.agent-inbox/`: `bin/notify.sh` (unpacked from the app),
 the sender's transport config, `state/<session>.start` (turn timers), `presence` (seconds
 clocked at the keyboard), and `items.json` (the inbox itself).
+
+## Messages arrive, they are not fetched
+
+The Mac holds one connection open to the transport and the server writes each message down
+it as it happens. Nothing is on a timer, so a finished turn reaches your menubar in the time
+it takes to cross the network, and there is no interval to choose.
+
+Reconnecting is the whole design. The connection is expected to drop, on a sleep, a network
+change, or a server restart, and none of those are errors. The Mac reconnects and asks for
+everything since the last message it saw, so a lid closed for a day opens with the backlog
+rather than a hole. Waiting doubles from one second to a minute, so a server that is down is
+not hammered and a blip costs a second. Waking the Mac reconnects at once rather than
+waiting out the backoff.
+
+**There is one failure this has to catch on purpose.** A proxy that buffers responses will
+hold a connection that never completes, forever, and from the Mac that is indistinguishable
+from a quiet afternoon. ntfy acknowledges every new connection immediately, so if that
+acknowledgement does not arrive within ten seconds the connection is not going to deliver
+anything, and the app falls back to asking repeatedly instead. Silence is the one thing a
+notifier must never be able to mistake for calm.
 
 ## How it works
 

@@ -166,14 +166,6 @@ struct GeneralSettings: View {
                     .note(.tertiary)
             }
 
-            Section("Polling") {
-                LabeledContent("Check every") {
-                    Stepper(value: $settings.pollSeconds, in: 5...120, step: 5) {
-                        Text("\(settings.pollSeconds)s")
-                    }
-                    .onChange(of: settings.pollSeconds) { _, _ in model.poller.restart() }
-                }
-            }
         }
         .formStyle(.grouped)
     }

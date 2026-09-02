@@ -56,6 +56,15 @@ final class AppModel {
         SenderConfig.installNotifyScript()
         settings.sync()
         poller.start()
+
+        // A Mac that slept has a dead connection and no way to know it. Waiting
+        // for the next write to fail would cost a minute of silence right when
+        // someone opens the lid to see what happened overnight.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.poller.wake() }
+        }
     }
 
     var hooksInstalled: Bool { HookInstaller.isInstalled() }

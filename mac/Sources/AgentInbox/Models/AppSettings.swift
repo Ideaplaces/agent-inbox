@@ -51,9 +51,6 @@ final class AppSettings {
     }
 
 
-    var pollSeconds: Int {
-        didSet { defaults.set(pollSeconds, forKey: "pollSeconds") }
-    }
     var expireMinutes: Int {
         didSet { defaults.set(expireMinutes, forKey: "expireMinutes") }
     }
@@ -137,7 +134,6 @@ final class AppSettings {
     private init() {
         defaults.register(defaults: [
             "ntfyServer": AppSettings.publicNtfyServer,
-            "pollSeconds": 15,
             "expireMinutes": 5,
             "idleThreshold": 90,
             "minSeconds": 45,
@@ -153,7 +149,6 @@ final class AppSettings {
         ntfyServer = defaults.string(forKey: "ntfyServer") ?? Self.publicNtfyServer
         ntfyTopic = defaults.string(forKey: "ntfyTopic") ?? ""
         ntfyToken = Keychain.get("ntfy-token") ?? ""
-        pollSeconds = defaults.integer(forKey: "pollSeconds")
         expireMinutes = defaults.integer(forKey: "expireMinutes")
         idleThreshold = defaults.integer(forKey: "idleThreshold")
         soundName = defaults.string(forKey: "soundName") ?? Self.defaultSoundName
@@ -373,7 +368,6 @@ final class AppSettings {
 
         for (key, value) in shellConfig {
             switch key {
-            case "POLL_SECONDS": pollSeconds = Int(value) ?? pollSeconds
             case "EXPIRE_MINUTES": expireMinutes = Int(value) ?? expireMinutes
             case "IDLE_THRESHOLD": idleThreshold = Int(value) ?? idleThreshold
             case "MIN_SECONDS": minSeconds = Int(value) ?? minSeconds
