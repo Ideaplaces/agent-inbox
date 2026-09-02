@@ -26,12 +26,16 @@ final class Poller {
     private let settings: AppSettings
     private let store: InboxStore
     private let presence: Presence
+    private let sleeper: any Sleeper
     private var task: Task<Void, Never>?
     private var housekeeping: Task<Void, Never>?
     private var consecutiveFailures = 0
     /// Flipped once a connection is opened but never acknowledged, which is
     /// what a proxy that buffers responses looks like from here.
     private var streamingWorks = true
+    /// Whether the current connection has received the server's `open`.
+    /// State rather than a local so the watchdog can read it from its own task.
+    private var acknowledged = false
 
     /// Presence and expiry run on their own clock now that messages arrive on
     /// their own. They used to ride the poll timer, which is why a change to
@@ -51,10 +55,15 @@ final class Poller {
         .seconds(min(60, 1 << min(failures, 6)))
     }
 
-    init(settings: AppSettings, store: InboxStore, presence: Presence) {
+    /// Real time unless a test hands in a clock it can wind.
+    init(
+        settings: AppSettings, store: InboxStore, presence: Presence,
+        sleeper: any Sleeper = RealSleeper()
+    ) {
         self.settings = settings
         self.store = store
         self.presence = presence
+        self.sleeper = sleeper
     }
 
     /// Fold one poll's messages into the store, in arrival order, and return
@@ -138,7 +147,7 @@ final class Poller {
                     interval: Self.housekeepingInterval,
                     idleThreshold: self.settings.idleThreshold)
                 self.store.expire(afterMinutes: self.settings.expireMinutes)
-                try? await Task.sleep(for: .seconds(Self.housekeepingInterval))
+                try? await self.sleeper.sleep(for: .seconds(Self.housekeepingInterval))
             }
         }
 
@@ -147,7 +156,8 @@ final class Poller {
                 guard let self else { return }
                 await self.receive()
                 guard !Task.isCancelled else { return }
-                try? await Task.sleep(for: Self.backoff(afterFailures: self.consecutiveFailures))
+                try? await self.sleeper.sleep(
+                    for: Self.backoff(afterFailures: self.consecutiveFailures))
             }
         }
     }
@@ -193,7 +203,7 @@ final class Poller {
                 try await listen(to: transport)
             } else {
                 try await pollOnce(transport)
-                try await Task.sleep(for: .seconds(Self.housekeepingInterval))
+                try await sleeper.sleep(for: .seconds(Self.housekeepingInterval))
             }
             consecutiveFailures = 0
         } catch is CancellationError {
@@ -216,10 +226,10 @@ final class Poller {
     /// arrives, so fall back to asking repeatedly rather than waiting forever
     /// for a message that is already sitting in somebody's proxy.
     private func listen(to transport: any Transport) async throws {
-        var acknowledged = false
+        acknowledged = false
         let watchdog = Task { [weak self] in
-            try? await Task.sleep(for: Self.openAcknowledgementTimeout)
-            guard let self, !Task.isCancelled, !acknowledged else { return }
+            try? await self?.sleeper.sleep(for: Self.openAcknowledgementTimeout)
+            guard let self, !Task.isCancelled, !self.acknowledged else { return }
             self.streamingWorks = false
         }
         defer { watchdog.cancel() }
@@ -230,10 +240,10 @@ final class Poller {
                 acknowledged = true
                 watchdog.cancel()
                 consecutiveFailures = 0
-                status = .connected(Date())
+                status = .connected(sleeper.now)
             case .message(let message, let next):
                 cursor = next ?? cursor
-                status = .connected(Date())
+                status = .connected(sleeper.now)
                 deliver([message])
             }
             if !streamingWorks { return }
@@ -243,7 +253,7 @@ final class Poller {
     private func pollOnce(_ transport: any Transport) async throws {
         let result = try await transport.poll(cursor: cursor)
         cursor = result.cursor
-        status = .connected(Date())
+        status = .connected(sleeper.now)
         deliver(result.messages)
     }
 
@@ -272,7 +282,7 @@ final class Poller {
     /// when it wakes rather than on a schedule that ran without it.
     private func reportUsageIfADayHasPassed() {
         guard settings.shareUsageData, !settings.analyticsID.isEmpty else { return }
-        let now = Date()
+        let now = sleeper.now
         guard Analytics.shouldSend(last: settings.analyticsLastSent, now: now) else { return }
 
         let os = ProcessInfo.processInfo.operatingSystemVersion
