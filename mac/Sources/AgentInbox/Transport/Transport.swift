@@ -9,7 +9,7 @@ enum TransportEvent {
 }
 
 /// A place agent events arrive from. Stateless: the cursor is owned by the
-/// poller and handed back on every call, so a crash never replays history and
+/// receiver and handed back on every call, so a crash never replays history and
 /// never skips an event, and a reconnect asks for exactly what it missed.
 protocol Transport: Sendable {
     /// Messages as they arrive, on a connection held open. Finishes when the

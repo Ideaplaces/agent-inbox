@@ -133,7 +133,7 @@ struct MenuContentView: View {
 
     private var statusDot: some View {
         let (color, help): (Color, String) = {
-            switch model.poller.status {
+            switch model.receiver.status {
             case .connected: return (.green, "Connected")
             case .connecting: return (.yellow, "Connecting")
             case .notConfigured: return (.secondary, "No transport configured")

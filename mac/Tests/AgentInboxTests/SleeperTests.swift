@@ -6,13 +6,17 @@ import XCTest
 /// wake in deadline order, and a cancelled sleep throws instead of parking.
 @MainActor
 final class SleeperTests: XCTestCase {
-    func testSleepsWakeInDeadlineOrderAndNotBefore() async {
+    /// Two sleeps woken by one `advance` are resumed earliest first, but the
+    /// main actor makes no promise about which resumed task runs first, so
+    /// the order is checked one deadline at a time.
+    func testEachSleepWakesAtItsDeadlineAndNotBefore() async {
         let sleeper = TestSleeper()
         var woke: [String] = []
         let long = Task { @MainActor in
             try? await sleeper.sleep(for: .seconds(10))
             woke.append("long")
         }
+        await settle { sleeper.sleeping == 1 }
         let short = Task { @MainActor in
             try? await sleeper.sleep(for: .seconds(2))
             woke.append("short")
@@ -23,7 +27,11 @@ final class SleeperTests: XCTestCase {
         await settle { !woke.isEmpty }
         XCTAssertEqual(woke, [], "woke before its deadline")
 
-        sleeper.advance(by: .seconds(10))
+        sleeper.advance(by: .seconds(1))
+        await settle { woke.count == 1 }
+        XCTAssertEqual(woke, ["short"])
+
+        sleeper.advance(by: .seconds(8))
         await settle { woke.count == 2 }
         XCTAssertEqual(woke, ["short", "long"])
         XCTAssertEqual(sleeper.requested, [.seconds(10), .seconds(2)])

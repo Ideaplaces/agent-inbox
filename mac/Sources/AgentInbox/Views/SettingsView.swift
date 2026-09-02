@@ -187,7 +187,7 @@ struct TransportSettings: View {
                     if model.settings.historyURL != nil {
                         Button("Open History") { model.openHistory() }
                     }
-                    Button("Reconnect") { model.poller.restart() }
+                    Button("Reconnect") { model.receiver.restart() }
                 }
             }
             Section {
@@ -201,7 +201,7 @@ struct TransportSettings: View {
     private var statusLabel: some View {
         // One Label, styled by the status, so the branches share a type.
         let (text, icon, tint): (String, String, Color) = {
-            switch model.poller.status {
+            switch model.receiver.status {
             case .connected(let date):
                 let time = date.formatted(date: .omitted, time: .standard)
                 return ("Connected, last check \(time)", "checkmark.circle.fill", .green)
@@ -265,7 +265,7 @@ struct MachineSettings: View {
                 HStack {
                     Button("Send Test Event") {
                         Task {
-                            if let error = await model.poller.sendTestEvent() {
+                            if let error = await model.sendTestEvent() {
                                 model.transientMessage = error
                             } else {
                                 model.transientMessage = "Test event sent."

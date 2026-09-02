@@ -17,7 +17,8 @@ final class AppModel {
     let settings = AppSettings.shared
     let presence: Presence
     let store: InboxStore
-    let poller: Poller
+    let receiver: Receiver
+    let housekeeping: Housekeeping
     let updater = Updater()
 
     /// Shown in the menu when a background action has something to say.
@@ -33,11 +34,45 @@ final class AppModel {
     /// than whatever happens to be waiting on the machine. Point
     /// `SenderConfig.directory` at a scratch path first and it reads and writes
     /// nothing real.
+    ///
+    /// The receiving path is wired here and nowhere else: the receiver hands
+    /// each batch to the pipeline, every row the pipeline announces gets a
+    /// banner and a tally, and housekeeping runs on its own clock beside it.
     init() {
+        let settings = AppSettings.shared
         let presence = Presence()
+        let store = InboxStore(presence: presence)
+        let pipeline = MessagePipeline(store: store, presence: presence)
+        let usage = UsageReporter(settings: settings)
         self.presence = presence
-        self.store = InboxStore(presence: presence)
-        self.poller = Poller(settings: settings, store: store, presence: presence)
+        self.store = store
+        self.receiver = Receiver(
+            channel: { Self.channel(for: settings) },
+            deliver: { messages in
+                for item in pipeline.apply(messages) {
+                    Notifier.post(item, soundName: settings.soundName)
+                    usage.count(item)
+                }
+                usage.reportIfADayHasPassed()
+            })
+        self.housekeeping = Housekeeping(presence: presence, store: store, settings: settings)
+    }
+
+    /// The transport the settings describe, or nil when there is nothing to
+    /// connect to yet. Read again before every connection, so a change to the
+    /// server or topic takes effect at the next restart.
+    private static func channel(for settings: AppSettings) -> Receiver.Channel? {
+        switch settings.transport {
+        case .none:
+            return nil
+        case .ntfy:
+            guard !settings.ntfyTopic.isEmpty else { return nil }
+            return Receiver.Channel(
+                transport: NtfyTransport(
+                    server: settings.ntfyServer, topic: settings.ntfyTopic,
+                    token: settings.ntfyToken),
+                cursorKey: "cursor.ntfy.\(settings.ntfyServer)/\(settings.ntfyTopic)")
+        }
     }
 
     func start() {
@@ -55,7 +90,8 @@ final class AppModel {
         }
         SenderConfig.installNotifyScript()
         settings.sync()
-        poller.start()
+        housekeeping.start()
+        receiver.start()
 
         // A Mac that slept has a dead connection and no way to know it. Waiting
         // for the next write to fail would cost a minute of silence right when
@@ -63,7 +99,35 @@ final class AppModel {
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.poller.wake() }
+            MainActor.assumeIsolated { self?.receiver.wake() }
+        }
+    }
+
+    /// Send one event through the real pipeline so the user can see it work.
+    func sendTestEvent() async -> String? {
+        let script = SenderConfig.notifyScript
+        guard FileManager.default.isExecutableFile(atPath: script.path) else {
+            return "notify.sh is not installed yet. Set up this Mac first."
+        }
+        let payload = """
+        {"session_id":"agent-inbox-test","cwd":"\(FileManager.default.currentDirectoryPath)",\
+        "message":"Test notification from Agent Inbox"}
+        """
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = [script.path, "notification"]
+        let input = Pipe()
+        process.standardInput = input
+        do {
+            try process.run()
+            input.fileHandleForWriting.write(Data(payload.utf8))
+            try? input.fileHandleForWriting.close()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+                ? nil
+                : "notify.sh exited with status \(process.terminationStatus)"
+        } catch {
+            return error.localizedDescription
         }
     }
 

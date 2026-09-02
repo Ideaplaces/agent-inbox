@@ -114,7 +114,7 @@ struct TransportPicker: View {
                     Button("Generate") {
                         settings.ntfyTopic = AppSettings.randomNtfyTopic()
                         settings.transport = .ntfy
-                        model.poller.restart()
+                        model.receiver.restart()
                     }
                     .controlSize(.small)
                 }

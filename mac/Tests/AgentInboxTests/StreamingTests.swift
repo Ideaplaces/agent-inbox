@@ -13,34 +13,34 @@ import XCTest
 @MainActor
 final class StreamingTests: XCTestCase {
     func testAFirstFailureRetriesAlmostImmediately() {
-        XCTAssertEqual(Poller.backoff(afterFailures: 0), .seconds(1))
+        XCTAssertEqual(Receiver.backoff(afterFailures: 0), .seconds(1))
     }
 
     func testWaitingDoublesSoADeadServerIsNotHammered() {
-        XCTAssertEqual(Poller.backoff(afterFailures: 1), .seconds(2))
-        XCTAssertEqual(Poller.backoff(afterFailures: 2), .seconds(4))
-        XCTAssertEqual(Poller.backoff(afterFailures: 3), .seconds(8))
+        XCTAssertEqual(Receiver.backoff(afterFailures: 1), .seconds(2))
+        XCTAssertEqual(Receiver.backoff(afterFailures: 2), .seconds(4))
+        XCTAssertEqual(Receiver.backoff(afterFailures: 3), .seconds(8))
     }
 
     /// Capped, or a server down overnight would come back to a client that has
     /// talked itself into waiting hours before trying again.
     func testWaitingIsCapped() {
-        XCTAssertEqual(Poller.backoff(afterFailures: 10), .seconds(60))
-        XCTAssertEqual(Poller.backoff(afterFailures: 10_000), .seconds(60))
+        XCTAssertEqual(Receiver.backoff(afterFailures: 10), .seconds(60))
+        XCTAssertEqual(Receiver.backoff(afterFailures: 10_000), .seconds(60))
     }
 
     /// The watchdog has to outlast a slow connection and still fire long
     /// before a person decides the app is broken.
     func testTheWatchdogWaitsLongEnoughToBeFairAndShortEnoughToMatter() {
-        XCTAssertGreaterThanOrEqual(Poller.openAcknowledgementTimeout, .seconds(5))
-        XCTAssertLessThanOrEqual(Poller.openAcknowledgementTimeout, .seconds(30))
+        XCTAssertGreaterThanOrEqual(Receiver.openAcknowledgementTimeout, .seconds(5))
+        XCTAssertLessThanOrEqual(Receiver.openAcknowledgementTimeout, .seconds(30))
     }
 
     /// Presence and expiry used to ride the poll timer, so changing how often
     /// the app checked for messages quietly changed how fast the inbox aged.
     /// They have their own clock now, and it has to keep ticking.
     func testHousekeepingStillHasAClockOfItsOwn() {
-        XCTAssertGreaterThan(Poller.housekeepingInterval, 0)
+        XCTAssertGreaterThan(Housekeeping.interval, 0)
     }
 }
 

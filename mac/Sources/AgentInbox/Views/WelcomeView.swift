@@ -72,7 +72,7 @@ struct WelcomeView: View {
                     Spacer()
                     Button("Send Test Event") {
                         Task {
-                            if let error = await model.poller.sendTestEvent() {
+                            if let error = await model.sendTestEvent() {
                                 model.transientMessage = error
                             } else {
                                 model.transientMessage = "Test event sent. Watch the menubar."
@@ -81,7 +81,7 @@ struct WelcomeView: View {
                     }
                     Button("Done") {
                         model.settings.hasCompletedOnboarding = true
-                        model.poller.restart()
+                        model.receiver.restart()
                         WelcomeWindowController.shared.close()
                     }
                     .buttonStyle(.borderedProminent)
