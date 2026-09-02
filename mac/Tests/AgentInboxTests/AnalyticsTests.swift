@@ -89,7 +89,7 @@ final class AnalyticsTests: XCTestCase {
     /// Nothing is registered as a default for this key, so an install that has
     /// never been asked reads as off.
     func testItIsOffOnAnInstallThatWasNeverAsked() throws {
-        let suite = try XCTUnwrap(UserDefaults(suiteName: "analytics-test-\(UUID().uuidString)"))
-        XCTAssertFalse(suite.bool(forKey: "shareUsageData"))
+        // In memory: a named suite leaves a plist behind in ~/Library/Preferences.
+        XCTAssertFalse(MemoryDefaults().bool(forKey: "shareUsageData"))
     }
 }

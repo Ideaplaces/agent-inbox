@@ -11,7 +11,6 @@ import XCTest
 @MainActor
 final class ReceiverTests: XCTestCase {
     private var sleeper: TestSleeper!
-    private var suite: String!
     private var defaults: UserDefaults!
     private var delivered: [TransportMessage] = []
     private var receiver: Receiver!
@@ -19,14 +18,16 @@ final class ReceiverTests: XCTestCase {
     override func setUp() {
         super.setUp()
         sleeper = TestSleeper()
-        suite = "receiver-test-\(UUID().uuidString)"
-        defaults = UserDefaults(suiteName: suite)
+        // In memory, never a suite. `UserDefaults(suiteName:)` writes a real
+        // plist into ~/Library/Preferences, and cfprefsd rewrites it after the
+        // process exits, so `removePersistentDomain` in tearDown does not
+        // stick. This test had left 800 of them on the maintainer's Mac.
+        defaults = MemoryDefaults()
         delivered = []
     }
 
     override func tearDown() {
         receiver?.stop()
-        defaults.removePersistentDomain(forName: suite)
         super.tearDown()
     }
 

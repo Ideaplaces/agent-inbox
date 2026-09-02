@@ -142,6 +142,32 @@ docs.ideaplaces.com/devops/macos-app-signing.
   may not be there yet. And two sleeps woken by one `advance` resume in
   deadline order, but the main actor does not promise to run them in that
   order, so never assert cross-task ordering off a single advance.
+- **Never use `UserDefaults(suiteName:)` in a test.** It writes a real plist
+  into `~/Library/Preferences`, and cfprefsd rewrites it after the process has
+  exited, so `removePersistentDomain` in `tearDown` does not stick. Two tests
+  had left 826 of them on the maintainer's Mac before anyone looked. Use
+  `MemoryDefaults` from `IsolatedSettings.swift`, and build models through
+  `IsolatedSettings.model()`, which is the one way a test gets an app model
+  that touches nothing real.
+- **Adding a setting is two places.** A property on `SettingsValues` and a
+  line in its hand-written `init(from:)`. Forget the second and the field
+  decodes as its default forever, silently, because the decoder is deliberately
+  lenient so an older snapshot never fails to load.
+- **The gate for "no singletons" is `static let shared`, not `.shared`.**
+  `grep -rn "\.shared" mac/Sources` will always find Apple's own
+  (`NSWorkspace.shared`, `URLSession.shared`). The one that means something is
+  `grep -rn "static let shared\|static var shared" mac/Sources`, which must
+  print nothing.
+- **Sender config writes are change-gated now.** A setter used to rewrite
+  `~/.agent-inbox/config` unconditionally; now `sync()` runs only when a
+  sender-visible field actually changed. `AppModel.start()` still syncs once
+  unconditionally, so a fresh launch always leaves the file current.
+- **The delegate gets the model from the App, not from a global.**
+  `AgentInboxApp.init` builds the model and sets `delegate.model` on the
+  adaptor, which has already constructed the delegate by then; verified with a
+  throwaway package rather than assumed. The optional is guarded with a
+  precondition, so a future refactor that reorders this fails at launch
+  loudly, which is the right failure.
 - **Test the binary you think you are testing.** A `--configure` flag appeared to
   hang through several rounds of debugging because `/Applications` held the
   released build, which predated the flag.
