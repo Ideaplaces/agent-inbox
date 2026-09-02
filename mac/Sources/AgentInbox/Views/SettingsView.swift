@@ -184,7 +184,7 @@ struct GeneralSettings: View {
                     }
                     .controlSize(.small)
                 }
-                Text("These apply on every machine that reads your config, not just this Mac.")
+                Text("This Mac only. Every machine keeps its own config, so set these again on a dev box you report from.")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
@@ -196,14 +196,6 @@ struct GeneralSettings: View {
                     }
                     .onChange(of: settings.pollSeconds) { _, _ in model.poller.restart() }
                 }
-                LabeledContent("Ignore turns under") {
-                    Stepper(value: $settings.minSeconds, in: 0...600, step: 15) {
-                        Text("\(settings.minSeconds)s")
-                    }
-                }
-                Text("Short back-and-forth turns never reach the inbox. This is applied by the sender, on every machine that reads your config.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

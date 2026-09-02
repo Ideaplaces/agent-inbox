@@ -177,8 +177,8 @@ Three hooks produce these:
 **A short turn reports nothing, and that is the setting people meet first.** Saying "hello"
 to an agent and getting no notification looks exactly like the app not working. It is the
 45-second floor, and it is now **Settings → General → Report turns longer than**. Set it to
-zero and every turn reports, however short. It applies to the machine you set it on, so a
-dev box you report from needs its own.
+zero and every turn reports, however short. It applies to the machine you set it on: every
+machine keeps its own `~/.agent-inbox/config`, so a dev box you report from needs its own.
 
 **Settings are a page inside the menu, not a window.** Click the gear and the popover shows
 them, with a way back. This is deliberate: a separate Settings window opens wherever macOS
