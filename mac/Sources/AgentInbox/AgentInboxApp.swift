@@ -19,9 +19,9 @@ struct AgentInboxApp: App {
             }
         }
         .menuBarExtraStyle(.window)
-
-        Settings {
-            SettingsView().environment(model)
-        }
+        // No `Settings` scene on purpose. Its window opens wherever macOS
+        // decides, which on a Mac driving a full-screen app is a different
+        // Space, so the click appears to do nothing. Settings are a page
+        // inside the popover instead, which opens where the click was.
     }
 }

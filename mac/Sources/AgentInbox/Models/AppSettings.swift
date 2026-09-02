@@ -174,6 +174,17 @@ final class AppSettings {
     // Spoken forms ship alongside the typed ones because dictation cannot
     // produce a "#": across 37,000 dictations, "hashtag notify" never once
     // became "#notify". Saying "watch this" has to be enough.
+    /// How the shortest-reportable-turn setting reads in the UI.
+    ///
+    /// Zero has to say "every turn" rather than "0s", because 0s is the one
+    /// value people will not believe means what it means. The floor exists
+    /// because a quick back-and-forth is not worth a notification, but nobody
+    /// discovers that by watching a short turn produce nothing: it looks
+    /// exactly like the app being broken, which is how it was first reported.
+    static func minSecondsCaption(_ seconds: Int) -> String {
+        seconds <= 0 ? "Every turn" : "\(seconds)s"
+    }
+
     static let defaultWatchTags = "#notify, #inbox, #watch, #agent-inbox, watch this, notify me"
     static let defaultMuteTag = "#mute, stop notifying"
 

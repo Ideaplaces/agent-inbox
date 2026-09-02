@@ -171,8 +171,19 @@ Three hooks produce these:
 | Hook event | Meaning | What you get |
 |------------|---------|--------------|
 | `UserPromptSubmit` | You handed work to the agent | Nothing. It just records a start time |
-| `Stop` | The agent finished its turn | **✅** with the duration and its closing words, the first and last sentence of what it said. Turns shorter than `MIN_SECONDS` (45s by default) are dropped, so quick back-and-forth doesn't spam you |
+| `Stop` | The agent finished its turn | **✅** with the duration and its closing words, the first and last sentence of what it said. Turns shorter than **Settings → General → Report turns longer than** (45s by default) are dropped, so quick back-and-forth doesn't spam you |
 | `Notification` | The agent needs permission, or has gone idle | **🖐️** with the reason and what it just asked. A permission prompt always reports. The idle timer fires 60s after *every* turn, so it only reports when the agent's closing line was a question; otherwise the ✅ already said it |
+
+**A short turn reports nothing, and that is the setting people meet first.** Saying "hello"
+to an agent and getting no notification looks exactly like the app not working. It is the
+45-second floor, and it is now **Settings → General → Report turns longer than**. Set it to
+zero and every turn reports, however short. It applies to the machine you set it on, so a
+dev box you report from needs its own.
+
+**Settings are a page inside the menu, not a window.** Click the gear and the popover shows
+them, with a way back. This is deliberate: a separate Settings window opens wherever macOS
+decides to put it, which on a Mac driving a full-screen app is another Space, so the click
+appears to do nothing at all.
 
 **Clicking an item clears it.** There is deliberately no jump-to-session: a notification
 carries only the first eight characters of the session id, and `claude --resume` needs the
@@ -320,8 +331,9 @@ running as another user can read it, so the token lives in `~/.agent-inbox/ntfy-
 `0600` instead. Switching transport removes the files belonging to the one you left, because
 `notify.sh` posts to whatever it finds: a leftover config is not inert, it keeps sending.
 
-These are sender-side only, and the app writes them itself so the two can never disagree.
-Poll interval, sound, expiry, idle threshold and usage sharing are app-side and live in
+These are sender-side only, and the app writes them itself so the two can never disagree,
+including `MIN_SECONDS`, which **Settings → General → Report turns longer than** writes
+here. Poll interval, sound, expiry, idle threshold and usage sharing are app-side and live in
 Settings. Usage sharing is deliberately not in this file: the senders never report anything,
 so there would be nothing for them to read.
 Notifications play **Pop** by default; **Settings → General → Sound** changes it, and

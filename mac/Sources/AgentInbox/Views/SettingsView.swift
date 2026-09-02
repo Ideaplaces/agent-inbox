@@ -1,18 +1,43 @@
 import AppKit
 import SwiftUI
 
+/// The settings, as a page inside the menubar popover.
+///
+/// Not a window. A separate Settings window opens wherever macOS decides,
+/// which on a Mac driving a full-screen app is another Space: the click does
+/// nothing you can see, and the honest conclusion a person draws is that the
+/// app is broken. That happened on the second Mac this was ever installed on.
+/// A page in the popover opens where the click was, every time.
 @MainActor
-struct SettingsView: View {
+struct SettingsPanes: View {
+    @Environment(AppModel.self) private var model
+    @State private var pane: Pane = .general
+
+    enum Pane: String, CaseIterable, Identifiable {
+        case general = "General"
+        case transport = "Transport"
+        case machines = "Machines"
+        var id: String { rawValue }
+    }
+
     var body: some View {
-        TabView {
-            GeneralSettings()
-                .tabItem { Label("General", systemImage: "gearshape") }
-            TransportSettings()
-                .tabItem { Label("Transport", systemImage: "antenna.radiowaves.left.and.right") }
-            MachineSettings()
-                .tabItem { Label("Machines", systemImage: "desktopcomputer") }
+        VStack(spacing: 0) {
+            Picker("", selection: $pane) {
+                ForEach(Pane.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            switch pane {
+            case .general: GeneralSettings()
+            case .transport: TransportSettings()
+            case .machines: MachineSettings()
+            }
         }
-        .frame(width: 520)
     }
 }
 
@@ -91,6 +116,25 @@ struct GeneralSettings: View {
             }
 
             Section("Conversations") {
+                // First in the section on purpose. This is the setting that
+                // makes the app look broken when nobody knows it exists: a
+                // short turn reports nothing, which is indistinguishable from
+                // nothing working. Reported by two people, one of them the
+                // person who wrote the default.
+                LabeledContent("Report turns longer than") {
+                    Stepper(value: $settings.minSeconds, in: 0...300, step: 5) {
+                        Text(AppSettings.minSecondsCaption(settings.minSeconds))
+                    }
+                }
+                Text("A quick back-and-forth is not worth interrupting yourself over, so turns shorter than this are dropped. Set it to zero and every turn reports, however short.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("This Mac only. Every machine keeps its own config, so set it again on a dev box you report from.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 Picker("Report", selection: $settings.watchMode) {
                     Text("Every conversation").tag("all")
                     Text("Only tagged conversations").tag("tagged")

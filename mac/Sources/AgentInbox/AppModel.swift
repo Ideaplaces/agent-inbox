@@ -3,6 +3,11 @@ import Foundation
 import Observation
 import UserNotifications
 
+enum MenuRoute {
+    case inbox
+    case settings
+}
+
 /// Everything with a lifetime longer than a view, in one place.
 @Observable
 @MainActor
@@ -17,6 +22,10 @@ final class AppModel {
 
     /// Shown in the menu when a background action has something to say.
     var transientMessage: String?
+
+    /// Which page the popover is showing. Settings live in here rather than in
+    /// a window of their own, so opening them cannot land on another Space.
+    var menuRoute: MenuRoute = .inbox
 
     /// Not private, so a tool can build an isolated one.
     ///

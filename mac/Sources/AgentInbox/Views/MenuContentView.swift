@@ -13,6 +13,7 @@ private struct ContentHeightKey: PreferenceKey {
 struct MenuContentView: View {
     @Environment(AppModel.self) private var model
     @State private var contentHeight: CGFloat = 0
+    @State private var settingsContentHeight: CGFloat = 0
 
     /// One row is roughly 56pt, so this keeps a single item visible even
     /// before the first measurement lands.
@@ -28,17 +29,33 @@ struct MenuContentView: View {
         min(max(measured, minimumListHeight), maximumListHeight)
     }
 
+    /// The height to give the settings page. Its floor is higher than the
+    /// list's: one row of settings is not a useful page, and a settings screen
+    /// that opens two controls tall reads as broken rather than as short.
+    static let minimumSettingsHeight: CGFloat = 260
+
+    static func settingsHeight(forContent measured: CGFloat) -> CGFloat {
+        min(max(measured, minimumSettingsHeight), maximumListHeight)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
-            Divider()
+            switch model.menuRoute {
+            case .inbox:
+                header
+                Divider()
 
-            if !model.settings.isConfigured {
-                setupPrompt
-            } else if model.store.unread.isEmpty {
-                emptyState
-            } else {
-                itemList
+                if !model.settings.isConfigured {
+                    setupPrompt
+                } else if model.store.unread.isEmpty {
+                    emptyState
+                } else {
+                    itemList
+                }
+            case .settings:
+                settingsHeader
+                Divider()
+                settingsBody
             }
 
             if let message = model.transientMessage {
@@ -55,6 +72,44 @@ struct MenuContentView: View {
             footer
         }
         .frame(width: 560)
+    }
+
+    /// The settings page's own header: a way back, and a title saying where
+    /// you are. Both matter, because the popover has no window chrome to tell
+    /// you either.
+    private var settingsHeader: some View {
+        HStack(spacing: 8) {
+            Button {
+                model.menuRoute = .inbox
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .buttonStyle(.borderless)
+            .help("Back to the inbox")
+            Text("Settings")
+                .font(.system(size: 13, weight: .semibold))
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+    }
+
+    /// Measured and clamped exactly like the list, and for the same reason: a
+    /// ScrollView has no height of its own, and inside a popover that sizes
+    /// itself to its content nothing establishes a floor, so it can be handed
+    /// zero and simply not draw.
+    private var settingsBody: some View {
+        ScrollView {
+            SettingsPanes()
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: ContentHeightKey.self, value: proxy.size.height)
+                    }
+                )
+        }
+        .frame(height: Self.settingsHeight(forContent: settingsContentHeight))
+        .onPreferenceChange(ContentHeightKey.self) { settingsContentHeight = $0 }
     }
 
     private var header: some View {
@@ -166,19 +221,25 @@ struct MenuContentView: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            Button("Mark All Read") { model.store.markAllRead() }
-                .disabled(!model.store.hasUnread)
-            if model.settings.historyURL != nil {
-                Button("History") { model.openHistory() }
+            if model.menuRoute == .inbox {
+                Button("Mark All Read") { model.store.markAllRead() }
+                    .disabled(!model.store.hasUnread)
+                if model.settings.historyURL != nil {
+                    Button("History") { model.openHistory() }
+                }
             }
             Spacer()
             Button("Check for Updates") { model.updater.checkForUpdates() }
                 .disabled(!model.updater.canCheck)
-            SettingsLink {
-                Image(systemName: "gearshape")
+            if model.menuRoute == .inbox {
+                Button {
+                    model.menuRoute = .settings
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .buttonStyle(.borderless)
+                .help("Settings")
             }
-            .buttonStyle(.borderless)
-            .simultaneousGesture(TapGesture().onEnded { SettingsWindowFocus.raise() })
             Button {
                 NSApp.terminate(nil)
             } label: {
