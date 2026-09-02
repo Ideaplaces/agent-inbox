@@ -695,5 +695,31 @@ run prompt "$(prompt_payload 'anything at all')" >/dev/null
   && ok "and leaves recent ones alone" \
   || fail "and leaves recent ones alone" "fresh.watch was removed"
 
+# --- a fresh install reports every turn, however short ---
+#
+# The first thing anyone does after installing is say "hello" to an agent to
+# see whether it works. With a 45 second floor that turn reported nothing and
+# the install looked broken. The floor is a setting now, and its default is 0.
+new_home
+mkdir -p "$HOME/.agent-inbox/state"
+printf '%s' "$(( $(date +%s) - 3 ))" > "$HOME/.agent-inbox/state/$SID.start"
+out="$(run stop "$(printf '{"session_id":"%s","cwd":"/tmp/repo"}' "$SID")")"
+case "$out" in
+  *"WOULD SEND"*) ok "with no config a three second turn still reports";;
+  *) fail "with no config a three second turn still reports" "got: $out";;
+esac
+case "$out" in
+  *"(0m 3s)"*) ok "and the title still carries its duration";;
+  *) fail "and the title still carries its duration" "got: $out";;
+esac
+[ "$(field "$out" .elapsed)" = "3" ] \
+  && ok "and the contract carries the raw seconds" \
+  || fail "and the contract carries the raw seconds" "got: $(last_line "$out")"
+
+printf 'MIN_SECONDS=45\n' > "$HOME/.agent-inbox/config"
+out="$(run stop "$(printf '{"session_id":"%s","cwd":"/tmp/repo"}' "$SID")")"
+[ -z "$out" ] && ok "a floor set in config still drops a short turn" \
+  || fail "a floor set in config still drops a short turn" "got: $out"
+
 echo
 echo "$PASS checks passed"

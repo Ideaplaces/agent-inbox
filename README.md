@@ -181,14 +181,15 @@ Three hooks produce these:
 | Hook event | Meaning | What you get |
 |------------|---------|--------------|
 | `UserPromptSubmit` | You handed work to the agent | Nothing. It just records a start time |
-| `Stop` | The agent finished its turn | **✅** with the duration and its closing words, the first and last sentence of what it said. Turns shorter than **Settings → General → Report turns longer than** (45s by default) are dropped, so quick back-and-forth doesn't spam you |
+| `Stop` | The agent finished its turn | **✅** with the duration and its closing words, the first and last sentence of what it said. Every turn by default; raise **Settings → General → Report turns longer than** to drop quick back-and-forth |
 | `Notification` | The agent needs permission, or has gone idle | **🖐️** with the reason and what it just asked. A permission prompt always reports. The idle timer fires 60s after *every* turn, so it only reports when the agent's closing line was a question; otherwise the ✅ already said it |
 
-**A short turn reports nothing, and that is the setting people meet first.** Saying "hello"
-to an agent and getting no notification looks exactly like the app not working. It is the
-45-second floor, and it is now **Settings → General → Report turns longer than**. Set it to
-zero and every turn reports, however short. It applies to the machine you set it on: every
-machine keeps its own `~/.agent-inbox/config`, so a dev box you report from needs its own.
+**Every turn reports by default, however short.** The floor is 0 because saying "hello" to
+an agent and getting no notification looks exactly like the app not working, and that is
+the first thing anyone does after installing. If every turn is too chatty, raise
+**Settings → General → Report turns longer than** and turns under it are dropped. It
+applies to the machine you set it on: every machine keeps its own `~/.agent-inbox/config`,
+so a dev box you report from needs its own.
 
 **Settings are a page inside the menu, not a window.** Click the gear and the popover shows
 them, with a way back. This is deliberate: a separate Settings window opens wherever macOS
@@ -328,7 +329,7 @@ The app owns its own settings, in **Settings**. The only file you might touch is
 `~/.agent-inbox/config`, which the bash senders read:
 
 ```bash
-MIN_SECONDS=45                  # ignore turns shorter than this
+MIN_SECONDS=0                   # ignore turns shorter than this; 0 reports every turn
 WATCH_MODE=all                  # or "tagged": report only tagged conversations
 WATCH_TAGS="#notify, #inbox, watch this"   # tags that turn a conversation on
 MUTE_TAG="#mute, stop notifying"           # tags that silence one

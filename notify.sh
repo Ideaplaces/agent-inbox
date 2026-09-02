@@ -18,7 +18,14 @@ STATE_DIR="$CONF_DIR/state"
 mkdir -p "$STATE_DIR" 2>/dev/null
 
 # Config (optional): MIN_SECONDS, HOST_LABEL
-MIN_SECONDS=45
+#
+# Zero, so a fresh install reports every turn. The first thing anyone does
+# after installing is say "hello" to an agent to see whether it works; with a
+# 45 second floor that turn reported nothing and the install looked broken.
+# It did, on the second Mac this was ever installed on. The floor is a visible
+# setting in the app now, so anyone who finds every turn too chatty can raise
+# it; a default that hides the first notification defeats the install.
+MIN_SECONDS=0
 HOST_LABEL="$(hostname -s)"
 # all    every session reports, and the mute tag silences one
 # tagged nothing reports until a watch tag turns it on
