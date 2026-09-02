@@ -111,7 +111,7 @@ struct GeneralSettings: View {
                 // person who wrote the default.
                 LabeledContent("Report turns longer than") {
                     Stepper(value: $settings.minSeconds, in: 0...300, step: 5) {
-                        Text(AppSettings.minSecondsCaption(settings.minSeconds))
+                        Text(SettingsCopy.minSecondsCaption(settings.minSeconds))
                     }
                 }
                 Text("A quick back-and-forth is not worth interrupting yourself over, so turns shorter than this are dropped. Set it to zero and every turn reports, however short.")
@@ -123,7 +123,7 @@ struct GeneralSettings: View {
                     Text("Every conversation").tag("all")
                     Text("Only tagged conversations").tag("tagged")
                 }
-                Text(AppSettings.reportModeCaption(watchMode: settings.watchMode))
+                Text(SettingsCopy.reportModeCaption(watchMode: settings.watchMode))
                     .note()
 
                 // A TextField's first argument is its label, not a
@@ -140,7 +140,7 @@ struct GeneralSettings: View {
                         .font(.system(size: 11, design: .monospaced))
                         .onSubmit { settings.watchTags = AppSettings.normalizeTags(settings.watchTags) }
                 }
-                Text(AppSettings.watchTagCaption(watchMode: settings.watchMode))
+                Text(SettingsCopy.watchTagCaption(watchMode: settings.watchMode))
                     .note()
                 LabeledContent("Mute tag") {
                     TextField("", text: $settings.muteTag,
@@ -150,7 +150,7 @@ struct GeneralSettings: View {
                         .font(.system(size: 11, design: .monospaced))
                         .onSubmit { settings.muteTag = AppSettings.normalizeTags(settings.muteTag) }
                 }
-                Text(AppSettings.muteTagCaption(watchMode: settings.watchMode))
+                Text(SettingsCopy.muteTagCaption(watchMode: settings.watchMode))
                     .note()
                 HStack {
                     Text("Typed or said anywhere in a message. Separate several with commas, which lets a tag be a phrase like \"watch this\" for dictation. Case does not matter.")

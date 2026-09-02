@@ -5,7 +5,7 @@ import Security
 import AppKit
 #endif
 
-enum TransportKind: String, CaseIterable, Identifiable {
+enum TransportKind: String, CaseIterable, Identifiable, Codable {
     case none
     case ntfy
 
@@ -24,68 +24,108 @@ enum TransportKind: String, CaseIterable, Identifiable {
 /// Values the sender hooks read stay mirrored into `~/.agent-inbox/` so a
 /// machine that still runs the bash scripts keeps working, and so the app can
 /// adopt an existing bash install without asking the user to retype anything.
+///
+/// The settings themselves are one `SettingsValues`, stored whole. The named
+/// properties below are windows onto it, kept so a view can still bind to
+/// `$settings.ntfyTopic` and so a call site reads as it always did.
 @Observable
 final class AppSettings {
     static let shared = AppSettings()
 
-    private let defaults = UserDefaults.standard
-    /// Set while reading existing on-disk state. Every setter mirrors to
-    /// `~/.agent-inbox/`, so without this, adopting a shell install would
-    /// overwrite the very file it is about to read.
-    private var isAdopting = false
+    /// The one key everything is under. The flat per-setting keys an older
+    /// build wrote are read once, by `SettingsValues.init(flatKeysIn:)`, on
+    /// the first launch that finds this key absent.
+    static let storageKey = "settings"
 
-    var transport: TransportKind {
-        didSet { defaults.set(transport.rawValue, forKey: "transport"); sync() }
+    private let defaults: UserDefaults
+    private let secrets: any SecretStore
+
+    /// Every setting except the token. One write per change, and the shell
+    /// config is rewritten only when something the senders read has changed:
+    /// picking a different sound must not touch a file the hooks parse.
+    var values: SettingsValues {
+        didSet {
+            guard values != oldValue else { return }
+            persist()
+            if values.senderSnapshot(token: ntfyToken) != oldValue.senderSnapshot(token: ntfyToken) {
+                sync()
+            }
+        }
     }
-    var ntfyServer: String {
-        didSet { defaults.set(ntfyServer, forKey: "ntfyServer"); sync() }
-    }
-    var ntfyTopic: String {
-        didSet { defaults.set(ntfyTopic, forKey: "ntfyTopic"); sync() }
-    }
+
     /// Bearer token for a self-hosted ntfy. Empty for ntfy.sh, which has no
     /// accounts. In the Keychain rather than UserDefaults because it is a
     /// credential, and mirrored to the sender's own file by `sync()`.
     var ntfyToken: String {
-        didSet { Keychain.set(ntfyToken, for: "ntfy-token"); sync() }
+        didSet { secrets.set(ntfyToken, for: "ntfy-token"); sync() }
     }
 
-
+    var transport: TransportKind {
+        get { values.transport }
+        set { values.transport = newValue }
+    }
+    var ntfyServer: String {
+        get { values.ntfyServer }
+        set { values.ntfyServer = newValue }
+    }
+    var ntfyTopic: String {
+        get { values.ntfyTopic }
+        set { values.ntfyTopic = newValue }
+    }
     var expireMinutes: Int {
-        didSet { defaults.set(expireMinutes, forKey: "expireMinutes") }
+        get { values.expireMinutes }
+        set { values.expireMinutes = newValue }
     }
     var idleThreshold: Int {
-        didSet { defaults.set(idleThreshold, forKey: "idleThreshold") }
+        get { values.idleThreshold }
+        set { values.idleThreshold = newValue }
     }
     var soundName: String {
-        didSet { defaults.set(soundName, forKey: "soundName") }
+        get { values.soundName }
+        set { values.soundName = newValue }
     }
     /// Sender-side: "all" reports every conversation and lets #mute silence
     /// one; "tagged" stays quiet until a conversation is tagged. Owned here
     /// because the app rewrites the sender config wholesale, so a key it does
     /// not know about would be erased on the next change.
     var watchMode: String {
-        didSet { defaults.set(watchMode, forKey: "watchMode"); sync() }
+        get { values.watchMode }
+        set { values.watchMode = newValue }
     }
     /// Sender-side: the tags that turn a conversation on, space separated.
     var watchTags: String {
-        didSet { defaults.set(watchTags, forKey: "watchTags"); sync() }
+        get { values.watchTags }
+        set { values.watchTags = newValue }
     }
     /// Sender-side: the tag that silences a conversation.
     var muteTag: String {
-        didSet { defaults.set(muteTag, forKey: "muteTag"); sync() }
+        get { values.muteTag }
+        set { values.muteTag = newValue }
     }
     /// Sender-side: turns shorter than this never reach the inbox.
     var minSeconds: Int {
-        didSet { defaults.set(minSeconds, forKey: "minSeconds"); sync() }
+        get { values.minSeconds }
+        set { values.minSeconds = newValue }
     }
     /// Sender-side: the machine name shown in every message. On a remote box
     /// this must equal its SSH host alias so the inbox can open it.
     var hostLabel: String {
-        didSet { defaults.set(hostLabel, forKey: "hostLabel"); sync() }
+        get { values.hostLabel }
+        set { values.hostLabel = newValue }
     }
     var hasCompletedOnboarding: Bool {
-        didSet { defaults.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding") }
+        get { values.hasCompletedOnboarding }
+        set { values.hasCompletedOnboarding = newValue }
+    }
+    /// Whether anyone has yet said whether this app opens at login.
+    ///
+    /// First launch turns it on for you, so the answer to "why did it stop
+    /// notifying me" is never "it was not running". That is a default, not a
+    /// policy: the moment a person or a script decides either way, the
+    /// decision is recorded here and no later launch overrides it.
+    var hasDecidedLoginItem: Bool {
+        get { values.hasDecidedLoginItem }
+        set { values.hasDecidedLoginItem = newValue }
     }
     /// Anonymous usage counts, off until you say otherwise.
     ///
@@ -96,94 +136,58 @@ final class AppSettings {
     /// app already sees every message, so it can count them without the
     /// senders knowing anything about it.
     var shareUsageData: Bool {
-        didSet {
-            defaults.set(shareUsageData, forKey: "shareUsageData")
+        get { values.shareUsageData }
+        set {
+            var next = values
+            next.shareUsageData = newValue
             // A fresh id each time it is switched on, so turning it off and on
             // again is a new anonymous install rather than a resumed identity.
-            if shareUsageData { analyticsID = UUID().uuidString }
+            if newValue { next.analyticsID = UUID().uuidString }
+            values = next
         }
     }
     /// A random id, made when usage sharing is turned on. Not derived from
     /// anything about the machine or the person, and thrown away when sharing
     /// goes off.
     var analyticsID: String {
-        didSet { defaults.set(analyticsID, forKey: "analyticsID") }
+        get { values.analyticsID }
+        set { values.analyticsID = newValue }
     }
     var analyticsLastSent: Date? {
-        didSet { defaults.set(analyticsLastSent, forKey: "analyticsLastSent") }
+        get { values.analyticsLastSent }
+        set { values.analyticsLastSent = newValue }
     }
     /// Counted locally between sends, so one event a day can carry the total
     /// and no event has to be sent per notification.
     var pendingFinished: Int {
-        didSet { defaults.set(pendingFinished, forKey: "pendingFinished") }
+        get { values.pendingFinished }
+        set { values.pendingFinished = newValue }
     }
     var pendingNeedsYou: Int {
-        didSet { defaults.set(pendingNeedsYou, forKey: "pendingNeedsYou") }
+        get { values.pendingNeedsYou }
+        set { values.pendingNeedsYou = newValue }
     }
 
-    /// Whether anyone has yet said whether this app opens at login.
-    ///
-    /// First launch turns it on for you, so the answer to "why did it stop
-    /// notifying me" is never "it was not running". That is a default, not a
-    /// policy: the moment a person or a script decides either way, the
-    /// decision is recorded here and no later launch overrides it.
-    var hasDecidedLoginItem: Bool {
-        didSet { defaults.set(hasDecidedLoginItem, forKey: "hasDecidedLoginItem") }
+    /// The snapshot if there is one, else whatever the flat keys say, which
+    /// on a fresh install is the defaults. A migrated or fresh value is
+    /// written back at once, so the flat keys are never consulted again.
+    init(defaults: UserDefaults = .standard, secrets: any SecretStore = LoginKeychain()) {
+        self.defaults = defaults
+        self.secrets = secrets
+        let stored = defaults.data(forKey: Self.storageKey)
+            .flatMap { try? JSONDecoder().decode(SettingsValues.self, from: $0) }
+        values = stored ?? SettingsValues(flatKeysIn: defaults)
+        ntfyToken = secrets.get("ntfy-token") ?? ""
+        if stored == nil { persist() }
     }
 
-    private init() {
-        defaults.register(defaults: [
-            "ntfyServer": AppSettings.publicNtfyServer,
-            "expireMinutes": 5,
-            "idleThreshold": 90,
-            // Zero: every turn reports. Someone who just installed says "hello"
-            // to an agent to see whether this works, and a 45-second floor
-            // turns that first test into silence. The floor is a visible
-            // setting now, so anyone who finds every turn too chatty raises it.
-            "minSeconds": 0,
-            "watchMode": "all",
-            "watchTags": AppSettings.defaultWatchTags,
-            "muteTag": AppSettings.defaultMuteTag,
-            "soundName": AppSettings.defaultSoundName,
-        ])
-        transport = TransportKind(rawValue: defaults.string(forKey: "transport") ?? "") ?? .none
-        // ntfy is the default because it needs no account, no bot, and no
-        // channel to provision: the topic name is the whole channel. Discord
-        // is the deliberate choice you make when you want a durable archive.
-        ntfyServer = defaults.string(forKey: "ntfyServer") ?? Self.publicNtfyServer
-        ntfyTopic = defaults.string(forKey: "ntfyTopic") ?? ""
-        ntfyToken = Keychain.get("ntfy-token") ?? ""
-        expireMinutes = defaults.integer(forKey: "expireMinutes")
-        idleThreshold = defaults.integer(forKey: "idleThreshold")
-        soundName = defaults.string(forKey: "soundName") ?? Self.defaultSoundName
-        minSeconds = defaults.integer(forKey: "minSeconds")
-        watchMode = defaults.string(forKey: "watchMode") ?? "all"
-        watchTags = defaults.string(forKey: "watchTags") ?? AppSettings.defaultWatchTags
-        muteTag = defaults.string(forKey: "muteTag") ?? AppSettings.defaultMuteTag
-        hostLabel = defaults.string(forKey: "hostLabel") ?? Host.current().localizedName ?? "mac"
-        hasCompletedOnboarding = defaults.bool(forKey: "hasCompletedOnboarding")
-        hasDecidedLoginItem = defaults.bool(forKey: "hasDecidedLoginItem")
-        shareUsageData = defaults.bool(forKey: "shareUsageData")
-        analyticsID = defaults.string(forKey: "analyticsID") ?? ""
-        analyticsLastSent = defaults.object(forKey: "analyticsLastSent") as? Date
-        pendingFinished = defaults.integer(forKey: "pendingFinished")
-        pendingNeedsYou = defaults.integer(forKey: "pendingNeedsYou")
+    private func persist() {
+        defaults.set(try? JSONEncoder().encode(values), forKey: Self.storageKey)
     }
 
     // Spoken forms ship alongside the typed ones because dictation cannot
     // produce a "#": across 37,000 dictations, "hashtag notify" never once
     // became "#notify". Saying "watch this" has to be enough.
-    /// How the shortest-reportable-turn setting reads in the UI.
-    ///
-    /// Zero has to say "every turn" rather than "0s", because 0s is the one
-    /// value people will not believe means what it means. The floor exists
-    /// because a quick back-and-forth is not worth a notification, but nobody
-    /// discovers that by watching a short turn produce nothing: it looks
-    /// exactly like the app being broken, which is how it was first reported.
-    static func minSecondsCaption(_ seconds: Int) -> String {
-        seconds <= 0 ? "Every turn" : "\(seconds)s"
-    }
-
     static let defaultWatchTags = "#notify, #inbox, #watch, #agent-inbox, watch this, notify me"
     static let defaultMuteTag = "#mute, stop notifying"
 
@@ -202,15 +206,6 @@ final class AppSettings {
             .joined(separator: raw.contains(",") ? ", " : " ")
     }
 
-    /// The topic is the only secret protecting message bodies, so it has to be
-    /// long enough that guessing it is not a threat model.
-    /// The free public ntfy, and the reason this installs without an account.
-    ///
-    /// Spelled once because three separate things key off it: the default a
-    /// fresh install lands on, the placeholder in setup, and whether the token
-    /// field is shown at all. When they were three string literals, changing
-    /// the default would have left the token field hidden on a server that
-    /// needs one, and the failure is a silent 403 with an empty inbox.
     /// The banner sound a fresh install gets.
     ///
     /// A notification you have to be looking at is half a notification, and the
@@ -221,36 +216,14 @@ final class AppSettings {
     /// sounds in /System/Library/Sounds. Set it to "" for silence.
     nonisolated static let defaultSoundName = "Pop"
 
-    nonisolated static let publicNtfyServer = "https://ntfy.sh"
-
-    /// What the report mode actually decides, which is narrower than either
-    /// label suggests.
+    /// The free public ntfy, and the reason this installs without an account.
     ///
-    /// It is the default for a conversation nobody has tagged, and nothing
-    /// more: `notify.sh` records a watch tag as "on" and a mute tag as "off"
-    /// against the session, and only falls back to the mode when neither has
-    /// been seen. Both fields therefore stay live in both modes, so a pane that
-    /// greyed one out would be stating something the sender does not do. What
-    /// changes is which one you reach for, and that is what these say.
-    nonisolated static func reportModeCaption(watchMode: String) -> String {
-        watchMode == "tagged"
-            ? "A conversation you have not tagged stays silent. This is only the default: "
-                + "either tag overrides it, and the most recent one wins."
-            : "A conversation you have not tagged reports. This is only the default: either "
-                + "tag overrides it, and the most recent one wins."
-    }
-
-    nonisolated static func watchTagCaption(watchMode: String) -> String {
-        watchMode == "tagged"
-            ? "The only thing that makes a conversation report."
-            : "Turns a conversation back on after you muted it."
-    }
-
-    nonisolated static func muteTagCaption(watchMode: String) -> String {
-        watchMode == "tagged"
-            ? "Silences a conversation you had tagged to watch."
-            : "Silences one conversation."
-    }
+    /// Spelled once because three separate things key off it: the default a
+    /// fresh install lands on, the placeholder in setup, and whether the token
+    /// field is shown at all. When they were three string literals, changing
+    /// the default would have left the token field hidden on a server that
+    /// needs one, and the failure is a silent 403 with an empty inbox.
+    nonisolated static let publicNtfyServer = "https://ntfy.sh"
 
     /// What actually protects the messages, which is not the same answer on
     /// every server and is the thing this pane used to get wrong.
@@ -274,39 +247,8 @@ final class AppSettings {
         return .tokenIsTheSecret
     }
 
-    /// The sentence under the topic field. Three states, because "keep the
-    /// topic secret" is wrong advice on a server that authenticates and
-    /// useless advice on one that then refuses you.
-    nonisolated static func topicExplanation(server: String, token: String) -> String {
-        switch accessModel(server: server, token: token) {
-        case .tokenIsTheSecret:
-            return "The token is the secret here, not the topic. The server checks it on every "
-                + "read and every publish, so where it denies anonymous access the topic name "
-                + "grants nothing on its own. It is kept in the Keychain, and mirrored to "
-                + "~/.agent-inbox/ntfy-token so the senders on this Mac can read it."
-        case .topicIsTheSecret where server != publicNtfyServer:
-            return "No token, so this server is being asked anonymously and the topic name is "
-                + "still the whole secret. If the server does not allow anonymous access, "
-                + "nothing arrives: the status below turns red with the HTTP code after two "
-                + "failed polls."
-        case .topicIsTheSecret:
-            return "The topic name is the whole secret. ntfy.sh puts no gate in front of it, so "
-                + "anyone who learns the name reads every message and can publish to it. That "
-                + "is why the generated one carries 96 bits of randomness instead of a name you "
-                + "would choose. Keep it private."
-        }
-    }
-
-    /// The line above the topic field. "Nothing to provision" is true of
-    /// ntfy.sh and is the first thing a self-hosted server contradicts.
-    nonisolated static func transportIntro(server: String) -> String {
-        server == publicNtfyServer
-            ? "No account, no bot, nothing to provision. A topic name is the whole channel, "
-                + "and one has already been generated for you."
-            : "Pointing at your own ntfy. The topic still names the channel; what that server "
-                + "requires is what decides who can reach it."
-    }
-
+    /// The topic is the only secret protecting message bodies, so it has to be
+    /// long enough that guessing it is not a threat model.
     nonisolated static func randomNtfyTopic() -> String {
         let user = NSUserName().lowercased().filter { $0.isLetter || $0.isNumber }
         var bytes = [UInt8](repeating: 0, count: 12)
@@ -336,51 +278,36 @@ final class AppSettings {
     /// installed by this app and hooks installed by the bash script behave the
     /// same and read the same values.
     func sync() {
-        guard !isAdopting else { return }
         SenderConfig.write(senderSnapshot)
     }
 
     var senderSnapshot: SenderSnapshot {
-        SenderSnapshot(
-            transport: transport,
-            ntfyTopic: ntfyTopic,
-            ntfyServer: ntfyServer,
-            ntfyToken: ntfyToken,
-            minSeconds: minSeconds,
-            hostLabel: hostLabel,
-            watchMode: watchMode,
-            watchTags: watchTags,
-            muteTag: muteTag)
+        values.senderSnapshot(token: ntfyToken)
     }
 
     /// Take over an existing bash install without making the user retype it.
     ///
-    /// Everything is read into memory first: the setters mirror back to the
-    /// same directory, so touching one value before reading the rest would
-    /// destroy the source.
+    /// Everything is read into memory first and applied as one assignment at
+    /// the end. Assigning `values` mirrors back to the same directory, so a
+    /// write before the reads were finished would destroy the source.
     func adoptExistingShellInstall() {
         guard transport == .none else { return }
 
         let topic = SenderConfig.readFile("ntfy-topic")
         let shellConfig = SenderConfig.readShellConfig()
 
-        isAdopting = true
-        defer {
-            isAdopting = false
-            sync()
-        }
-
+        var next = values
         for (key, value) in shellConfig {
             switch key {
-            case "EXPIRE_MINUTES": expireMinutes = Int(value) ?? expireMinutes
-            case "IDLE_THRESHOLD": idleThreshold = Int(value) ?? idleThreshold
-            case "MIN_SECONDS": minSeconds = Int(value) ?? minSeconds
-            case "NOTIFY_SOUND": soundName = value
-            case "HOST_LABEL": if !value.isEmpty { hostLabel = value }
-            case "WATCH_MODE": if value == "all" || value == "tagged" { watchMode = value }
-            case "WATCH_TAGS": if !value.isEmpty { watchTags = value }
-            case "MUTE_TAG": if !value.isEmpty { muteTag = value }
-            case "NTFY_SERVER": if !value.isEmpty { ntfyServer = value }
+            case "EXPIRE_MINUTES": next.expireMinutes = Int(value) ?? next.expireMinutes
+            case "IDLE_THRESHOLD": next.idleThreshold = Int(value) ?? next.idleThreshold
+            case "MIN_SECONDS": next.minSeconds = Int(value) ?? next.minSeconds
+            case "NOTIFY_SOUND": next.soundName = value
+            case "HOST_LABEL": if !value.isEmpty { next.hostLabel = value }
+            case "WATCH_MODE": if value == "all" || value == "tagged" { next.watchMode = value }
+            case "WATCH_TAGS": if !value.isEmpty { next.watchTags = value }
+            case "MUTE_TAG": if !value.isEmpty { next.muteTag = value }
+            case "NTFY_SERVER": if !value.isEmpty { next.ntfyServer = value }
             default: break
             }
         }
@@ -390,8 +317,13 @@ final class AppSettings {
         // are cleared by the writer, so it stops publishing to a channel this
         // app can no longer read.
         if let topic, !topic.isEmpty {
-            ntfyTopic = topic
-            transport = .ntfy
+            next.ntfyTopic = topic
+            next.transport = .ntfy
         }
+
+        // One assignment, so the mirror is written once and only if something
+        // the senders read actually changed. The launch path calls `sync()`
+        // right after this regardless.
+        values = next
     }
 }

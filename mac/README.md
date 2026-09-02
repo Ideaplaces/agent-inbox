@@ -78,7 +78,9 @@ Sources/AgentInbox/
 ├── AppModel.swift             shared state, notification actions, CLI flags
 ├── Models/
 │   ├── InboxItem.swift        the wire format and its parser
-│   └── AppSettings.swift      UserDefaults + Keychain, mirrored to ~/.agent-inbox
+│   ├── AppSettings.swift      the settings object: one snapshot in UserDefaults, token in Keychain, mirrored to ~/.agent-inbox
+│   ├── SettingsValues.swift   every setting as one Codable value, and the migration from the old flat keys
+│   └── SettingsCopy.swift     the sentences under the settings controls
 ├── Store/
 │   ├── InboxStore.swift       items, read state, presence-based expiry
 │   └── Keychain.swift

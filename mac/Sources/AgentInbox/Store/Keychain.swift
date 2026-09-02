@@ -36,3 +36,19 @@ enum Keychain {
         return string
     }
 }
+
+/// What `AppSettings` needs from a keychain, so a test can hand it memory.
+///
+/// The login keychain is shared with the installed app: a test that read
+/// from it would see the developer's real token, and one that wrote to it
+/// would delete it. Every test therefore gets an in-memory store and the app
+/// gets the real thing.
+protocol SecretStore {
+    func get(_ account: String) -> String?
+    func set(_ value: String?, for account: String)
+}
+
+struct LoginKeychain: SecretStore {
+    func get(_ account: String) -> String? { Keychain.get(account) }
+    func set(_ value: String?, for account: String) { Keychain.set(value, for: account) }
+}

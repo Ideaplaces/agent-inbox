@@ -58,16 +58,16 @@ final class MenuRouteTests: XCTestCase {
 /// person who chose the default.
 final class MinimumTurnCaptionTests: XCTestCase {
     func testZeroSaysWhatItMeans() {
-        XCTAssertEqual(AppSettings.minSecondsCaption(0), "Every turn")
+        XCTAssertEqual(SettingsCopy.minSecondsCaption(0), "Every turn")
     }
 
     func testAFloorReadsAsSeconds() {
-        XCTAssertEqual(AppSettings.minSecondsCaption(45), "45s")
+        XCTAssertEqual(SettingsCopy.minSecondsCaption(45), "45s")
     }
 
     /// The stepper's range starts at zero, but a stored negative from an older
     /// config must not print "-5s".
     func testANegativeIsTreatedAsNoFloor() {
-        XCTAssertEqual(AppSettings.minSecondsCaption(-5), "Every turn")
+        XCTAssertEqual(SettingsCopy.minSecondsCaption(-5), "Every turn")
     }
 }

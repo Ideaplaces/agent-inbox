@@ -34,10 +34,10 @@ final class AccessModelTests: XCTestCase {
     }
 
     func testTheThreeStatesEachGetTheirOwnExplanation() {
-        let publicServer = AppSettings.topicExplanation(
+        let publicServer = SettingsCopy.topicExplanation(
             server: AppSettings.publicNtfyServer, token: "")
-        let anonymous = AppSettings.topicExplanation(server: selfHosted, token: "")
-        let authenticated = AppSettings.topicExplanation(server: selfHosted, token: "tk_abc")
+        let anonymous = SettingsCopy.topicExplanation(server: selfHosted, token: "")
+        let authenticated = SettingsCopy.topicExplanation(server: selfHosted, token: "tk_abc")
 
         XCTAssertEqual(Set([publicServer, anonymous, authenticated]).count, 3)
         XCTAssertTrue(publicServer.contains("ntfy.sh"))
@@ -48,9 +48,9 @@ final class AccessModelTests: XCTestCase {
     func testTheIntroStopsClaimingNothingHasToBeProvisioned() {
         // True of ntfy.sh, and the first thing a self-hosted server contradicts.
         XCTAssertTrue(
-            AppSettings.transportIntro(server: AppSettings.publicNtfyServer)
+            SettingsCopy.transportIntro(server: AppSettings.publicNtfyServer)
                 .contains("No account, no bot"))
         XCTAssertFalse(
-            AppSettings.transportIntro(server: selfHosted).contains("No account, no bot"))
+            SettingsCopy.transportIntro(server: selfHosted).contains("No account, no bot"))
     }
 }

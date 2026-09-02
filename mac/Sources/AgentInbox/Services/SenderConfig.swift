@@ -2,7 +2,10 @@ import Foundation
 
 /// Exactly what the shell senders need to know. Passing this rather than the
 /// whole settings object keeps the mirror free of the Keychain and UserDefaults.
-struct SenderSnapshot {
+///
+/// Equatable so a settings change can be checked against the previous one
+/// and the file left alone when nothing a sender reads has moved.
+struct SenderSnapshot: Equatable {
     var transport: TransportKind
     var ntfyTopic: String = ""
     var ntfyServer: String = AppSettings.publicNtfyServer

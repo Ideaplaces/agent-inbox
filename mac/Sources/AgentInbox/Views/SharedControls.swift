@@ -103,7 +103,7 @@ struct TransportPicker: View {
         @Bindable var settings = model.settings
 
         VStack(alignment: .leading, spacing: 10) {
-            Text(AppSettings.transportIntro(server: settings.ntfyServer))
+            Text(SettingsCopy.transportIntro(server: settings.ntfyServer))
                 .note()
 
             VStack(alignment: .leading, spacing: 6) {
@@ -118,7 +118,7 @@ struct TransportPicker: View {
                     }
                     .controlSize(.small)
                 }
-                Text(AppSettings.topicExplanation(
+                Text(SettingsCopy.topicExplanation(
                     server: settings.ntfyServer, token: settings.ntfyToken))
                     .note(.tertiary)
                 LabeledContent("Server") {
