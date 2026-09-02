@@ -14,29 +14,45 @@ final class MemorySecrets: SecretStore {
     }
 }
 
-/// A UserDefaults suite of its own, and the scratch directory that stands in
-/// for `~/.agent-inbox`, for one test.
+/// UserDefaults that never reach disk.
 ///
-/// A named suite is a real file under ~/Library/Preferences the moment
-/// something is written to it, so `remove()` has to run from `tearDown`. And
-/// `removePersistentDomain` empties the domain without deleting the file, so
-/// the file is removed by hand too or every run leaves one behind.
-/// Nothing here is reached through a global: the suite goes into
-/// `AppSettings(defaults:)` and the directory into `SenderConfig.directory`,
-/// which is the one static left, because the files under it are the contract
-/// with the bash senders and are read by path.
+/// A named suite is the obvious alternative and it leaks: `UserDefaults(
+/// suiteName:)` is a real plist under ~/Library/Preferences the moment
+/// anything is written, and `removePersistentDomain` empties it without
+/// deleting it. cfprefsd writes the empty file back on its own schedule, after
+/// the process has exited, so deleting it from `tearDown` does not stick
+/// either. Every typed accessor on UserDefaults goes through
+/// `object(forKey:)` and every typed setter through `set(_:forKey:)`, so
+/// overriding those two and `removeObject` is the whole job.
+final class MemoryDefaults: UserDefaults {
+    private var storage: [String: Any] = [:]
+
+    init() { super.init(suiteName: nil)! }
+
+    override func object(forKey defaultName: String) -> Any? { storage[defaultName] }
+    override func set(_ value: Any?, forKey defaultName: String) {
+        if let value { storage[defaultName] = value } else { storage[defaultName] = nil }
+    }
+    override func removeObject(forKey defaultName: String) { storage[defaultName] = nil }
+    override func synchronize() -> Bool { true }
+}
+
+/// Everything an `AppSettings` or an `AppModel` needs in order to read and
+/// write nothing real: in-memory defaults, in-memory secrets, and a scratch
+/// directory in place of `~/.agent-inbox`.
+///
+/// The first two are handed in. The directory is the one static left,
+/// `SenderConfig.directory`, because the files under it are the contract with
+/// the bash senders and are found by path; `remove()` belongs in `tearDown`.
 @MainActor
 final class IsolatedSettings {
-    let suiteName: String
-    let defaults: UserDefaults
-    let directory: URL
+    let defaults = MemoryDefaults()
     let secrets = MemorySecrets()
+    let directory: URL
 
     init(_ label: String = "test") {
-        suiteName = "agent-inbox-\(label)-\(UUID().uuidString)"
-        defaults = UserDefaults(suiteName: suiteName)!
         directory = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent(suiteName)
+            .appendingPathComponent("agent-inbox-\(label)-\(UUID().uuidString)")
         SenderConfig.directory = directory
     }
 
@@ -44,11 +60,11 @@ final class IsolatedSettings {
         AppSettings(defaults: defaults, secrets: secrets)
     }
 
+    func model() -> AppModel {
+        AppModel(settings: settings(), defaults: defaults)
+    }
+
     func remove() {
-        defaults.removePersistentDomain(forName: suiteName)
-        let plist = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Preferences/\(suiteName).plist")
-        try? FileManager.default.removeItem(at: plist)
         try? FileManager.default.removeItem(at: directory)
     }
 }

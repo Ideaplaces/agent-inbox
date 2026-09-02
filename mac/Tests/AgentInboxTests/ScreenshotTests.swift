@@ -95,22 +95,30 @@ final class ScreenshotTests: XCTestCase {
         window.orderOut(nil)
     }
 
-    /// A model with a scratch directory, so nothing real is read or written.
+    /// Every model built during the run, removed together at the end.
+    private var scratches: [IsolatedSettings] = []
+
+    override func tearDown() {
+        for scratch in scratches { scratch.remove() }
+        scratches = []
+        super.tearDown()
+    }
+
+    /// A model that reads and writes nothing real: its own defaults suite,
+    /// in-memory secrets, and a scratch directory in place of ~/.agent-inbox.
     private func model(withItems items: [InboxItem]) -> AppModel {
-        SenderConfig.directory = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("agent-inbox-shot-\(UUID().uuidString)")
-        let model = AppModel()
+        let scratch = IsolatedSettings("shot")
+        scratches.append(scratch)
+        let model = scratch.model()
         model.settings.transport = .ntfy
         model.settings.ntfyTopic = "agent-inbox-you-2f8a1c94b7e0"
-        // Pin the server, or the Transport pane draws whatever this machine
-        // last left in the test process's defaults. It already committed a
-        // stray "DIAGNOSTIC.example.com" into docs/ once. On ntfy.sh the token
-        // row is not rendered at all, which also keeps the developer's real
-        // token out of a public screenshot: AppSettings reads it from the login
-        // keychain, which the test process shares with the installed app.
-        // Never assign ntfyToken here. Its setter writes through to that same
-        // keychain item, so a screenshot run would delete the real one.
-        model.settings.ntfyServer = AppSettings.publicNtfyServer
+        // The suite is fresh, so the server is the default and the Transport
+        // pane draws ntfy.sh, on which the token row is not rendered at all.
+        // Before the suite was isolated this test once committed a stray
+        // "DIAGNOSTIC.example.com" into docs/ from whatever the test process's
+        // defaults last held, and the token came from the login keychain the
+        // test process shares with the installed app. Neither can happen now:
+        // the token store is memory, and the keychain is never touched.
         if !items.isEmpty { model.store.add(items) }
         return model
     }

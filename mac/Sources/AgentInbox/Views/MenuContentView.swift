@@ -211,7 +211,7 @@ struct MenuContentView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Button("Set Up Agent Inbox") {
-                WelcomeWindowController.shared.show()
+                model.showWelcome()
             }
             .controlSize(.small)
         }

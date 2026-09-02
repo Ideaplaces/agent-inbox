@@ -12,14 +12,15 @@ enum MenuRoute {
 @Observable
 @MainActor
 final class AppModel {
-    static let shared = AppModel()
-
-    let settings = AppSettings.shared
+    let settings: AppSettings
     let presence: Presence
     let store: InboxStore
     let receiver: Receiver
     let housekeeping: Housekeeping
     let updater = Updater()
+    /// The first-run window. Owned here rather than by a global because it
+    /// hosts a view that needs this model, and there is no other model.
+    @ObservationIgnored private let welcomeWindow = WelcomeWindowController()
 
     /// Shown in the menu when a background action has something to say.
     var transientMessage: String?
@@ -28,18 +29,21 @@ final class AppModel {
     /// a window of their own, so opening them cannot land on another Space.
     var menuRoute: MenuRoute = .inbox
 
-    /// Not private, so a tool can build an isolated one.
+    /// There is one of these in the app, made by `AgentInboxApp`, and as many
+    /// as a test wants.
     ///
-    /// The screenshot generator needs a model whose inbox it controls rather
-    /// than whatever happens to be waiting on the machine. Point
-    /// `SenderConfig.directory` at a scratch path first and it reads and writes
-    /// nothing real.
+    /// Nothing here reaches for a global. The settings come in, and so does
+    /// the UserDefaults the receiver keeps its cursors in, so a test that
+    /// hands over its own suite reads and writes nothing real. The one thing
+    /// still found by path is `SenderConfig.directory`, because the files
+    /// under it are the contract with the bash senders; point it at a scratch
+    /// directory first.
     ///
     /// The receiving path is wired here and nowhere else: the receiver hands
     /// each batch to the pipeline, every row the pipeline announces gets a
     /// banner and a tally, and housekeeping runs on its own clock beside it.
-    init() {
-        let settings = AppSettings.shared
+    init(settings: AppSettings = AppSettings(), defaults: UserDefaults = .standard) {
+        self.settings = settings
         let presence = Presence()
         let store = InboxStore(presence: presence)
         let pipeline = MessagePipeline(store: store, presence: presence)
@@ -54,7 +58,8 @@ final class AppModel {
                     usage.count(item)
                 }
                 usage.reportIfADayHasPassed()
-            })
+            },
+            defaults: defaults)
         self.housekeeping = Housekeeping(presence: presence, store: store, settings: settings)
     }
 
@@ -169,6 +174,14 @@ final class AppModel {
         NSWorkspace.shared.open(url)
     }
 
+    func showWelcome() {
+        welcomeWindow.show(model: self)
+    }
+
+    func closeWelcome() {
+        welcomeWindow.close()
+    }
+
     /// The command to paste on any other machine that runs Claude Code.
     var remoteInstallCommand: String {
         let base = "curl -fsSL https://raw.githubusercontent.com/Ideaplaces/agent-inbox/main/install-remote.sh | bash -s --"
@@ -183,7 +196,17 @@ final class AppModel {
 
 /// Notification actions and app lifecycle.
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+    /// Handed over by `AgentInboxApp.init`, which runs before this delegate
+    /// hears about the launch, so by `applicationDidFinishLaunching` it is
+    /// always set. An optional rather than a `let` because the adaptor, not
+    /// the app, constructs this object, and it takes no arguments.
+    var model: AppModel?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        guard let model else {
+            preconditionFailure("AgentInboxApp did not hand the model to its delegate")
+        }
+        let settings = model.settings
         // Scriptable install steps, so setting a machine up does not require
         // clicking through the UI. Each one runs and exits.
         let arguments = CommandLine.arguments
@@ -193,8 +216,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 try LoginItem.set(enable)
                 // A script saying either way is a decision, so the next launch
                 // does not quietly re-enable what it just turned off.
-                MainActor.assumeIsolated { AppSettings.shared.hasDecidedLoginItem = true }
-                UserDefaults.standard.synchronize()
+                settings.hasDecidedLoginItem = true
+                settings.flush()
                 print("login item \(enable ? "registered" : "unregistered")")
                 exit(0)
             } catch {
@@ -205,7 +228,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // Configure the transport without the UI, so a provisioning script can
         // do in one command what the setup window does in several fields.
         if arguments.contains("--configure") {
-            let settings = AppSettings.shared
             func value(_ flag: String) -> String? {
                 guard let i = arguments.firstIndex(of: flag), i + 1 < arguments.count
                 else { return nil }
@@ -240,10 +262,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             if let label = value("--host-label"), !label.isEmpty {
                 settings.hostLabel = label
             }
-            // This process is about to exit, so the defaults must be on disk.
-            UserDefaults.standard.synchronize()
             settings.hasCompletedOnboarding = true
-            UserDefaults.standard.synchronize()
+            // This process is about to exit, so the defaults must be on disk.
+            settings.flush()
             exit(0)
         }
 
@@ -262,15 +283,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         UNUserNotificationCenter.current().delegate = self
         Notifier.registerCategories()
         Task { @MainActor in
-            AppModel.shared.start()
+            model.start()
             // Before anything else it might ask for: an inbox that is not
             // running has nothing to notify you about.
-            LoginItem.enableOnFirstLaunch()
+            LoginItem.enableOnFirstLaunch(settings)
             _ = await Notifier.requestAuthorization()
             // A menubar app is easy to miss on first launch, so show the
             // setup window until it has been completed once.
-            if !AppModel.shared.settings.hasCompletedOnboarding {
-                WelcomeWindowController.shared.show()
+            if !settings.hasCompletedOnboarding {
+                model.showWelcome()
             }
         }
     }
@@ -289,8 +310,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     ) async {
         let id = response.notification.request.content.userInfo["itemID"] as? String
         await MainActor.run {
-            let model = AppModel.shared
-            guard let id, let item = model.store.item(id: id) else { return }
+            guard let model, let id, let item = model.store.item(id: id) else { return }
             // Every route is the same: acknowledge it. There is nothing to
             // open, so a click on the banner just clears the item.
             switch response.actionIdentifier {

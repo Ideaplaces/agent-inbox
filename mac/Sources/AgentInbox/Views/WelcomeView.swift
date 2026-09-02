@@ -82,7 +82,7 @@ struct WelcomeView: View {
                     Button("Done") {
                         model.settings.hasCompletedOnboarding = true
                         model.receiver.restart()
-                        WelcomeWindowController.shared.close()
+                        model.closeWelcome()
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(!model.settings.isConfigured)

@@ -6,10 +6,9 @@ import SwiftUI
 /// outside a view, so the welcome window is plain AppKit hosting a SwiftUI view.
 @MainActor
 final class WelcomeWindowController {
-    static let shared = WelcomeWindowController()
     private var window: NSWindow?
 
-    func show() {
+    func show(model: AppModel) {
         if let window {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -17,7 +16,7 @@ final class WelcomeWindowController {
         }
 
         let hosting = NSHostingController(
-            rootView: WelcomeView().environment(AppModel.shared))
+            rootView: WelcomeView().environment(model))
         let window = NSWindow(contentViewController: hosting)
         window.title = "Agent Inbox"
         window.styleMask = [.titled, .closable, .fullSizeContentView]

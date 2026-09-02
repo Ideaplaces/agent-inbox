@@ -30,8 +30,6 @@ enum TransportKind: String, CaseIterable, Identifiable, Codable {
 /// `$settings.ntfyTopic` and so a call site reads as it always did.
 @Observable
 final class AppSettings {
-    static let shared = AppSettings()
-
     /// The one key everything is under. The flat per-setting keys an older
     /// build wrote are read once, by `SettingsValues.init(flatKeysIn:)`, on
     /// the first launch that finds this key absent.
@@ -183,6 +181,12 @@ final class AppSettings {
 
     private func persist() {
         defaults.set(try? JSONEncoder().encode(values), forKey: Self.storageKey)
+    }
+
+    /// Force the write to disk. Only for a process that is about to `exit`,
+    /// which is what the command-line flags do.
+    func flush() {
+        defaults.synchronize()
     }
 
     // Spoken forms ship alongside the typed ones because dictation cannot

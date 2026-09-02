@@ -23,7 +23,7 @@ enum LoginItem {
 
     /// Apply that rule, and record the answer either way.
     @MainActor
-    static func enableOnFirstLaunch(_ settings: AppSettings = .shared) {
+    static func enableOnFirstLaunch(_ settings: AppSettings) {
         guard shouldEnableOnLaunch(
             hasDecided: settings.hasDecidedLoginItem, isEnabled: isEnabled)
         else {

@@ -12,10 +12,20 @@ import XCTest
 /// which opens where the click was. These pin the two things that makes true.
 @MainActor
 final class MenuRouteTests: XCTestCase {
+    private var scratch: IsolatedSettings!
+
+    override func setUp() {
+        super.setUp()
+        scratch = IsolatedSettings("route")
+    }
+
+    override func tearDown() {
+        scratch.remove()
+        super.tearDown()
+    }
+
     private func model() -> AppModel {
-        SenderConfig.directory = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("agent-inbox-route-\(UUID().uuidString)")
-        return AppModel()
+        scratch.model()
     }
 
     func testThePopoverOpensOnTheInbox() {
