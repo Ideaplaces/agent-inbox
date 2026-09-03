@@ -45,8 +45,19 @@ run this again:
   wait "$pid" || die "the app exited with an error while running: $*"
 }
 
+# Spelled out rather than read back from $0: under `curl | bash -s`, $0 is
+# "bash", and the usage came out as "sed: bash: No such file or directory".
 usage() {
-  sed -n '2,12p' "$0" >&2
+  cat >&2 <<'USAGE'
+usage: setup-mac.sh --ntfy <topic> [--server <url>] [--token <token>] [--host-label <name>]
+
+  curl -fsSL https://raw.githubusercontent.com/Ideaplaces/agent-inbox/main/setup-mac.sh \
+    | bash -s -- --ntfy <topic>
+
+  --server <url>        a self-hosted ntfy
+  --token <token>       its access token, if it requires one
+  --host-label <name>   how this Mac is named in messages (default: its computer name)
+USAGE
   exit 1
 }
 

@@ -38,6 +38,14 @@ for tool in jq curl; do
   command -v "$tool" >/dev/null || { echo "$tool is required" >&2; exit 1; }
 done
 
+# Refuse before writing anything. A corrupt settings file used to slip through:
+# the jq failure sat inside an && list, which set -e ignores, so the script
+# announced success and left the file as it was.
+if [ -s "$SETTINGS" ] && ! jq -e 'type == "object"' "$SETTINGS" >/dev/null 2>&1; then
+  echo "$SETTINGS is not valid JSON. Fix it, or move it aside, and run this again. Nothing was changed." >&2
+  exit 1
+fi
+
 mkdir -p "$BIN_DIR"
 echo "==> Fetching notify.sh"
 curl -fsSL "$RAW_BASE/notify.sh" -o "$BIN_DIR/notify.sh"
@@ -64,7 +72,9 @@ if [ -n "$HOST_LABEL" ]; then
 fi
 
 mkdir -p "$(dirname "$SETTINGS")"
-[ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
+# An empty file is an empty object, as the app reads it; jq would turn it into
+# no output at all and the mv below would keep the file empty.
+[ -s "$SETTINGS" ] || echo '{}' > "$SETTINGS"
 cp "$SETTINGS" "$SETTINGS.bak.agent-inbox"
 
 TMP="$(mktemp)"
@@ -80,7 +90,8 @@ jq --arg n "$BIN_DIR/notify.sh" '
   | ensure("UserPromptSubmit"; "bash \"\($n)\" prompt")
   | ensure("Stop";             "bash \"\($n)\" stop")
   | ensure("Notification";     "bash \"\($n)\" notification")
-' "$SETTINGS" > "$TMP" && mv "$TMP" "$SETTINGS"
+' "$SETTINGS" > "$TMP" || { rm -f "$TMP"; echo "could not update $SETTINGS" >&2; exit 1; }
+mv "$TMP" "$SETTINGS"
 
 echo "==> Hooks installed into $SETTINGS (backup at $SETTINGS.bak.agent-inbox)"
 echo "==> Sending a test event"
