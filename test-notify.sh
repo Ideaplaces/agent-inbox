@@ -776,5 +776,21 @@ out="$(run stop "$(printf '{"session_id":"%s","cwd":"/tmp/repo"}' "$SID")")"
 [ -z "$out" ] && ok "a floor set in config still drops a short turn" \
   || fail "a floor set in config still drops a short turn" "got: $out"
 
+# --- the committed wire fixtures are what the sender produces today ---
+#
+# fixtures/wire/*.txt is the sender's real output for hand-made transcripts,
+# and the Mac app decodes those files in its own tests. A change to the wire
+# that is not regenerated into them leaves the app tested against a sender
+# that no longer exists, which is the gap the fixtures exist to close.
+FX="$(mktemp -d)"
+if "$HERE/fixtures/wire/regenerate.sh" "$FX" >/dev/null 2>&1 \
+  && drift="$(diff -r -x regenerate.sh "$HERE/fixtures/wire" "$FX" 2>&1)"; then
+  ok "the committed wire fixtures match what the sender produces"
+else
+  fail "the committed wire fixtures match what the sender produces" \
+    "run fixtures/wire/regenerate.sh: $(printf '%s' "${drift:-regenerate.sh failed}" | head -5 | tr '\n' ' ')"
+fi
+rm -rf "$FX"
+
 echo
 echo "$PASS checks passed"

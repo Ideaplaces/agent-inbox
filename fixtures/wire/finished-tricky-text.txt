@@ -1,0 +1,6 @@
+title: ✅ my-app @ devbox (1m 1s)
+body: 🧵 Fix the path
+🗣 fix the path
+💬 Renamed "old" to C:\tmp\new · /srv/app and it built 🚀. … Nothing else is outstanding here.
+session a1b2c3d4 · /home/me/my-app
+{"v":1,"kind":"finished","repo":"my-app","host":"devbox","duration":"1m 1s","elapsed":61,"summary":"Fix the path","ask":"fix the path","closing":"Renamed \"old\" to C:\\tmp\\new · /srv/app and it built 🚀. … Nothing else is outstanding here.","detail":null,"waitingOn":null,"session":"a1b2c3d4","cwd":"/home/me/my-app"}

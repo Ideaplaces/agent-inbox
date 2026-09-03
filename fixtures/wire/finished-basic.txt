@@ -1,0 +1,6 @@
+title: ✅ my-app @ devbox (4m 12s)
+body: 🧵 Rework the refund ledger
+🗣 and the chargeback path
+💬 Chargebacks post to the ledger and the backfill finished cleanly. … Ship it when you are ready.
+session a1b2c3d4 · /home/me/my-app
+{"v":1,"kind":"finished","repo":"my-app","host":"devbox","duration":"4m 12s","elapsed":252,"summary":"Rework the refund ledger","ask":"and the chargeback path","closing":"Chargebacks post to the ledger and the backfill finished cleanly. … Ship it when you are ready.","detail":null,"waitingOn":null,"session":"a1b2c3d4","cwd":"/home/me/my-app"}

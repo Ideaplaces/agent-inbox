@@ -1,0 +1,8 @@
+title: ✅ my-app @ devbox (0m 40s)
+body: 🧵 Push the branch
+🗣 push it
+```
+git push origin main
+```
+session a1b2c3d4 · /home/me/my-app
+{"v":1,"kind":"finished","repo":"my-app","host":"devbox","duration":"0m 40s","elapsed":40,"summary":"Push the branch","ask":"push it","closing":null,"detail":"```\ngit push origin main\n```","waitingOn":null,"session":"a1b2c3d4","cwd":"/home/me/my-app"}

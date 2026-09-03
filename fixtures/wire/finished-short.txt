@@ -1,0 +1,6 @@
+title: ✅ my-app @ devbox (0m 3s)
+body: 🧵 Say hello
+🗣 hello
+💬 Hello! Ready when you are, what should we work on today?
+session a1b2c3d4 · /home/me/my-app
+{"v":1,"kind":"finished","repo":"my-app","host":"devbox","duration":"0m 3s","elapsed":3,"summary":"Say hello","ask":"hello","closing":"Hello! Ready when you are, what should we work on today?","detail":null,"waitingOn":null,"session":"a1b2c3d4","cwd":"/home/me/my-app"}

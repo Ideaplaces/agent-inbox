@@ -1,0 +1,7 @@
+title: 🖐️ my-app @ devbox
+body: 🧵 Pick a car
+🗣 look at the listing
+Claude is waiting for your input
+❯ Same car, same seller, and the price dropped again since last week. … Which of those three should I keep?
+session a1b2c3d4 · /home/me/my-app
+{"v":1,"kind":"needsYou","repo":"my-app","host":"devbox","duration":null,"elapsed":null,"summary":"Pick a car","ask":"look at the listing","closing":null,"detail":"Claude is waiting for your input","waitingOn":"Same car, same seller, and the price dropped again since last week. … Which of those three should I keep?","session":"a1b2c3d4","cwd":"/home/me/my-app"}

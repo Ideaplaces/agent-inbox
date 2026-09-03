@@ -1,0 +1,5 @@
+title: ✅ my-app @ devbox
+body: 🗣 Why is the enum duplicated across three files?
+💬 The enum is generated into each package by the schema step, so the three copies are one source. … I removed the two stale hand edits and regenerated.
+session a1b2c3d4 · /home/me/my-app
+{"v":1,"kind":"finished","repo":"my-app","host":"devbox","duration":null,"elapsed":null,"summary":null,"ask":"Why is the enum duplicated across three files?","closing":"The enum is generated into each package by the schema step, so the three copies are one source. … I removed the two stale hand edits and regenerated.","detail":null,"waitingOn":null,"session":"a1b2c3d4","cwd":"/home/me/my-app"}
