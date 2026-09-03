@@ -95,3 +95,17 @@ func settle(until condition: @MainActor () -> Bool) async {
         await Task.yield()
     }
 }
+
+/// Poll `condition` on the main actor until it holds or `timeout` passes.
+///
+/// Real time, unlike `settle`, for the tests that cross a real socket: a
+/// reply from the fake ntfy server arrives on URLSession's own threads a few
+/// milliseconds later, and yielding two thousand times does not wait for it.
+/// Returns when the condition holds, so a healthy run costs one poll.
+@MainActor
+func eventually(within timeout: Duration = .seconds(2), _ condition: @MainActor () -> Bool) async {
+    let deadline = ContinuousClock.now + timeout
+    while !condition(), ContinuousClock.now < deadline {
+        try? await Task.sleep(for: .milliseconds(5))
+    }
+}
