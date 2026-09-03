@@ -229,6 +229,14 @@ The most recent tag wins, so you can flip a conversation on and off as often as
 you like, and it works on a conversation that is already running. Case does not
 matter. Nothing else to remember: no session ids, no separate command.
 
+**A tag inside code does not count.** Anything in backticks (`` `#mute` ``) or
+inside a fenced block (```` ``` ```` or `~~~`) is ignored when the prompt is read
+for tags. A report that quotes the tag is talking about it, not issuing it, and
+pasting an agent's report into a prompt is how one conversation went quiet for
+hours without anyone asking it to. Everything outside code is still matched
+as written, so the spoken forms keep working, and a tag that appears both in
+code and in plain text counts because of the plain one.
+
 **The tags are yours to choose.** Change them in **Settings → Conversations**.
 Separate several with commas, which is what lets a tag be a phrase with spaces in
 it. Without a comma they are separated by whitespace, so `#a #b` still means two

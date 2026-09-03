@@ -224,6 +224,63 @@ out="$(run notification "$(notif_payload)")"
 [ -z "$out" ] && ok "the typed mute tag still works alongside the spoken one" \
   || fail "the typed mute tag still works alongside the spoken one" "got: $out"
 
+# --- a tag inside code is being talked about, not issued ---
+#
+# The bug this pins: an agent's report, pasted into a prompt, quoted `#mute`
+# in backticks. The substring matched and the session went silent for hours.
+new_home
+run prompt "$(prompt_payload 'see the `#mute` tag in the docs')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+case "$out" in *"WOULD SEND"*) ok "a mute tag inside a code span does not mute";;
+  *) fail "a mute tag inside a code span does not mute" "got: $out";; esac
+
+run prompt "$(prompt_payload 'the report said ``#mute`` in double backticks')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+case "$out" in *"WOULD SEND"*) ok "nor does one inside a double-backtick span";;
+  *) fail "nor does one inside a double-backtick span" "got: $out";; esac
+
+new_home
+printf 'WATCH_MODE=tagged\n' > "$HOME/.agent-inbox/config"
+run prompt "$(prompt_payload 'here is the hook:
+```bash
+echo "#notify"
+```
+does that look right')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+[ -z "$out" ] && ok "a watch tag inside a fenced block does not enable" \
+  || fail "a watch tag inside a fenced block does not enable" "got: $out"
+
+run prompt "$(prompt_payload '~~~
+#notify
+~~~')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+[ -z "$out" ] && ok "nor inside a tilde fence" \
+  || fail "nor inside a tilde fence" "got: $out"
+
+# The plain occurrence wins over the quoted one, whichever order they come in.
+new_home
+run prompt "$(prompt_payload 'the `#mute` tag is what I want here, so #mute')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+[ -z "$out" ] && ok "a tag both in code and in prose still counts" \
+  || fail "a tag both in code and in prose still counts" "got: $out"
+
+new_home
+printf 'WATCH_MODE=tagged\n' > "$HOME/.agent-inbox/config"
+run prompt "$(prompt_payload '#notify on this one, the block below is just context
+```
+#mute
+```')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+case "$out" in *"WOULD SEND"*) ok "a plain watch tag survives a fenced block after it";;
+  *) fail "a plain watch tag survives a fenced block after it" "got: $out";; esac
+
+# Stripping code must leave the dictated phrases whole.
+new_home
+run prompt "$(prompt_payload 'set `x=1` there, and you can stop notifying me now')" >/dev/null
+out="$(run notification "$(notif_payload)")"
+[ -z "$out" ] && ok "a spoken mute phrase still works next to a code span" \
+  || fail "a spoken mute phrase still works next to a code span" "got: $out"
+
 # --- an attached screenshot must not fill the line ---
 img='{"type":"user","message":{"content":[{"type":"text","text":"[Image: source: /Users/x/.claude/image-cache/abc/9.png] Do you know why nothing appears?"}]}}'
 got="$(printf '%s\n' "$img" | fn _user_text last)"

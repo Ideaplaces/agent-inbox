@@ -67,9 +67,15 @@ _load_ntfy_config() {
 # remembered per session. A transcript can be tens of megabytes; it is never
 # opened for this.
 #
-# Deliberately a plain substring match. A tag inside pasted code counts, and
-# that is fine: nobody is harmed by a conversation they did not mean to watch,
-# and the alternative is parsing that gets clever and then gets it wrong.
+# A plain substring match, with one exception: code is not read. This used to
+# match inside pasted code too, on the theory that nobody is harmed by a
+# conversation they did not mean to watch. The mute tag showed the hole in
+# that: an agent's report, pasted into a prompt, quoted `#mute` in backticks,
+# the substring matched, and the session went silent for hours with nothing to
+# say why. A tag inside a code span or a fenced block is being talked about,
+# not issued, so strip_code drops those before the match. Everything left is
+# still matched as a plain substring, which is what lets a dictated phrase
+# work.
 #
 # The functions below read SESSION_ID, WATCH_FILE, TRANSCRIPT and the rest as
 # globals. Those are set after the last function definition, where the script
@@ -87,12 +93,28 @@ split_tags() {
   printf '%s' "$raw" | tr "$sep" '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
 }
 
+# The text with its code removed: fenced blocks (``` or ~~~, whole lines, the
+# same rule closing_words uses) and inline spans, double backticks first so
+# ``x`` is not read as two empty spans around x. A span is replaced by a space
+# rather than nothing, so its two neighbours cannot join into a tag that was
+# never typed. An unclosed fence drops everything after it, on purpose: a mute
+# that is missed shows up as one unwanted notification, a mute that fires by
+# mistake is hours of silence, so the doubt goes towards not matching.
+strip_code() { # stdin = the text, stdout = the prose left
+  awk '
+    BEGIN { fence = 0 }
+    /^[ \t]*(```|~~~)/ { fence = 1 - fence; next }
+    fence { next }
+    { gsub(/``([^`]|`[^`])*``/, " "); gsub(/`[^`]*`/, " "); print }
+  '
+}
+
 record_tags() { # $1 = the text the user just submitted
   local text tag
   [ -n "$SESSION_ID" ] || return 0
   # Matching ignores case: a tag that works only in lower case looks broken
   # rather than strict.
-  text="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  text="$(printf '%s' "$1" | strip_code | tr '[:upper:]' '[:lower:]')"
 
   while IFS= read -r tag; do
     [ -n "$tag" ] || continue
