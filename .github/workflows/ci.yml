@@ -82,6 +82,12 @@ jobs:
       - name: Sender tests
         run: ./test-notify.sh
 
+      # The installers edit ~/.claude/settings.json on every machine a user sets
+      # up. A bug there is a broken editor config on someone else's box, which
+      # is why they get the same treatment as the sender.
+      - name: Installer tests
+        run: ./test-install.sh
+
   notify:
     name: Discord CI status
     needs: [mac-app, mac-app-fork, shell]
