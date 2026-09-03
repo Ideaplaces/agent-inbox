@@ -56,13 +56,6 @@ _load_ntfy_config() {
   fi
 }
 
-INPUT="$(cat)"
-SESSION_ID="$(printf '%s' "$INPUT" | jq -r '.session_id // empty')"
-CWD="$(printf '%s' "$INPUT" | jq -r '.cwd // empty')"
-TRANSCRIPT="$(printf '%s' "$INPUT" | jq -r '.transcript_path // empty')"
-REPO="$(basename "${CWD:-unknown}")"
-NOW="$(date +%s)"
-
 # --- Per-conversation opt in and out ---
 #
 # Typing #notify (or #inbox, #watch, #agent-inbox) in a conversation makes it
@@ -77,7 +70,10 @@ NOW="$(date +%s)"
 # Deliberately a plain substring match. A tag inside pasted code counts, and
 # that is fine: nobody is harmed by a conversation they did not mean to watch,
 # and the alternative is parsing that gets clever and then gets it wrong.
-WATCH_FILE="$STATE_DIR/${SESSION_ID}.watch"
+#
+# The functions below read SESSION_ID, WATCH_FILE, TRANSCRIPT and the rest as
+# globals. Those are set after the last function definition, where the script
+# starts acting on the event; see the source-only seam there.
 
 # An empty watch list in tagged mode would be a silence nothing could escape,
 # so fall back to the defaults rather than leaving the inbox permanently dead.
@@ -350,6 +346,31 @@ contract_line() { # $1 = finished | needsYou
       detail: ($detail | nul), waitingOn: ($waitingOn | nul),
       session: ($session | nul), cwd: ($cwd | nul)}' 2>/dev/null
 }
+
+# Tests source this file for its functions. Nothing below this line runs then.
+#
+# test-notify.sh used to reach the functions by cutting them out of this file
+# with sed and sourcing the result, which breaks the moment a function grows a
+# nested brace or is reordered, and breaks the wrong way: it extracts something
+# else and tests that. Sourcing the real file needs everything above this line
+# to be free of side effects on the event, which is why the payload is read
+# here and not at the top.
+[ -n "${AGENT_INBOX_SOURCE_ONLY:-}" ] && return 0 2>/dev/null
+
+# --- The event ---
+#
+# The hook payload arrives on stdin. Everything the functions read as a global
+# is derived from it here.
+INPUT="$(cat)"
+SESSION_ID="$(printf '%s' "$INPUT" | jq -r '.session_id // empty')"
+CWD="$(printf '%s' "$INPUT" | jq -r '.cwd // empty')"
+TRANSCRIPT="$(printf '%s' "$INPUT" | jq -r '.transcript_path // empty')"
+REPO="$(basename "${CWD:-unknown}")"
+# AGENT_INBOX_NOW is a test seam: it pins "now" so a fixture's elapsed time is
+# the same on every run. Environment only, never read from config, so nothing
+# a user does in ~/.agent-inbox can freeze the clock.
+NOW="${AGENT_INBOX_NOW:-$(date +%s)}"
+WATCH_FILE="$STATE_DIR/${SESSION_ID}.watch"
 
 case "$KIND" in
   prompt)

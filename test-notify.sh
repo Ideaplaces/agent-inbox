@@ -24,6 +24,13 @@ run() {
   printf '%s' "$2" | AGENT_INBOX_DRY_RUN=1 bash "$NOTIFY" "$1" 2>/dev/null
 }
 
+# Call one of notify.sh's functions directly, in a subshell that has sourced
+# the real file for its definitions only. AGENT_INBOX_SOURCE_ONLY stops the
+# script before it reads the hook payload, so stdin is left for the function
+# under test. This replaced cutting functions out with sed, which broke as soon
+# as one grew a nested brace, and broke by testing the wrong text.
+fn() { AGENT_INBOX_SOURCE_ONLY=1 bash -c "source \"$NOTIFY\"; $*"; }
+
 SID="test-session"
 prompt_payload() { printf '{"session_id":"%s","cwd":"/tmp/repo","prompt":%s}' "$SID" "$(printf '%s' "$1" | jq -Rs .)"; }
 notif_payload()  { printf '{"session_id":"%s","cwd":"/tmp/repo","message":"needs you"}' "$SID"; }
@@ -218,31 +225,26 @@ out="$(run notification "$(notif_payload)")"
   || fail "the typed mute tag still works alongside the spoken one" "got: $out"
 
 # --- an attached screenshot must not fill the line ---
-UT="$(mktemp)"; sed -n '/^# An attached screenshot/,/^}/p' "$HERE/notify.sh" > "$UT"
 img='{"type":"user","message":{"content":[{"type":"text","text":"[Image: source: /Users/x/.claude/image-cache/abc/9.png] Do you know why nothing appears?"}]}}'
-got="$(printf '%s\n' "$img" | bash -c "source $UT; _user_text last")"
+got="$(printf '%s\n' "$img" | fn _user_text last)"
 [ "$got" = "Do you know why nothing appears?" ] \
   && ok "an image cache path is stripped from the snippet" \
   || fail "an image cache path is stripped from the snippet" "got: [$got]"
 
 plainmsg='{"type":"user","message":{"content":[{"type":"text","text":"just a normal message"}]}}'
-got="$(printf '%s\n' "$plainmsg" | bash -c "source $UT; _user_text last")"
+got="$(printf '%s\n' "$plainmsg" | fn _user_text last)"
 [ "$got" = "just a normal message" ] \
   && ok "ordinary text is left alone" \
   || fail "ordinary text is left alone" "got: [$got]"
-rm -f "$UT"
 
 # --- the thread line must survive a transcript that was never compacted ---
 #
 # The bug this pins: `"type":"summary"` is only written when a session is
 # compacted, and most sessions never are, so every notification went out with
 # a last message and no subject. `ai-title` is present from the first turn.
-CT="$(mktemp)"
-sed -n '/^# An attached screenshot/,/^}/p' "$HERE/notify.sh" > "$CT"
-sed -n '/^session_context()/,/^}/p' "$HERE/notify.sh" >> "$CT"
 # session_context sets CONTEXT rather than printing it, so the same values can
 # feed the contract line; read it back the way the sender does.
-context_of() { bash -c "source $CT; TRANSCRIPT=$1 session_context; printf '%s' \"\$CONTEXT\""; }
+context_of() { fn "TRANSCRIPT=$1 session_context; printf '%s' \"\$CONTEXT\""; }
 
 TR="$(mktemp)"
 cat > "$TR" <<'TRANSCRIPT'
@@ -446,7 +448,7 @@ else
   ok "a leftover Discord webhook file no longer sends anything"
 fi
 
-rm -f "$CT" "$TR"
+rm -f "$TR"
 
 # --- the closing words: how the turn ended, not how it started ---
 #
@@ -454,16 +456,12 @@ rm -f "$CT" "$TR"
 # conversation you left two days and several hundred thousand tokens ago. The
 # last message was already on the wire, but as its first 600 characters: the
 # wrong end, cut mid-word, and the app never drew it at all.
-CW="$(mktemp)"
-sed -n '/^last_assistant_text()/,/^}/p' "$HERE/notify.sh" > "$CW"
-sed -n '/^closing_words()/,/^}/p' "$HERE/notify.sh" >> "$CW"
-
 AT="$(mktemp)"
 say() { # the agent's last message, as a transcript
   printf '{"type":"assistant","message":{"content":[{"type":"text","text":%s}]}}\n' \
     "$(printf '%s' "$1" | jq -Rs .)" > "$AT"
 }
-closing() { bash -c "source $CW; TRANSCRIPT=$AT closing_words ${1:-}"; }
+closing() { fn "TRANSCRIPT=$AT closing_words ${1:-}"; }
 
 say 'The migration is deployed and the backfill finished cleanly. It took two passes because the first one timed out on the orders table. Nothing else is outstanding on this one.'
 got="$(closing)"
@@ -675,7 +673,7 @@ else
   fail "a control event carries no contract line" "args: $(tr '\n' ' ' < "$CURL_ARGS")"
 fi
 
-rm -f "$CW" "$AT"
+rm -f "$AT"
 
 # --- the state directory is swept, so it stops growing forever ---
 #
