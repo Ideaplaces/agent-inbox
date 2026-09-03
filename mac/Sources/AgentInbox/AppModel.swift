@@ -17,7 +17,12 @@ final class AppModel {
     let store: InboxStore
     let receiver: Receiver
     let housekeeping: Housekeeping
+    let notifier: Notifier
     let updater = Updater()
+    /// What the receiver hands each batch to: rows into the store, then a
+    /// banner and a tally for every row worth announcing. Kept as a property
+    /// so a test can walk a message through to the banner without a connection.
+    let deliver: @MainActor ([TransportMessage]) -> Void
     /// The first-run window. Owned here rather than by a global because it
     /// hosts a view that needs this model, and there is no other model.
     @ObservationIgnored private let welcomeWindow = WelcomeWindowController()
@@ -42,23 +47,33 @@ final class AppModel {
     /// The receiving path is wired here and nowhere else: the receiver hands
     /// each batch to the pipeline, every row the pipeline announces gets a
     /// banner and a tally, and housekeeping runs on its own clock beside it.
-    init(settings: AppSettings = AppSettings(), defaults: UserDefaults = .standard) {
+    ///
+    /// The banners go through `poster`, the one system call on this path. The
+    /// real center is the default; a test hands in one that records.
+    init(
+        settings: AppSettings = AppSettings(), defaults: UserDefaults = .standard,
+        poster: any NotificationPosting = SystemNotificationCenter()
+    ) {
         self.settings = settings
         let presence = Presence()
         let store = InboxStore(presence: presence)
         let pipeline = MessagePipeline(store: store, presence: presence)
         let usage = UsageReporter(settings: settings)
+        let notifier = Notifier(poster: poster)
+        let deliver: @MainActor ([TransportMessage]) -> Void = { messages in
+            for item in pipeline.apply(messages) {
+                notifier.post(item, soundName: settings.soundName)
+                usage.count(item)
+            }
+            usage.reportIfADayHasPassed()
+        }
         self.presence = presence
         self.store = store
+        self.notifier = notifier
+        self.deliver = deliver
         self.receiver = Receiver(
             channel: { Self.channel(for: settings) },
-            deliver: { messages in
-                for item in pipeline.apply(messages) {
-                    Notifier.post(item, soundName: settings.soundName)
-                    usage.count(item)
-                }
-                usage.reportIfADayHasPassed()
-            },
+            deliver: deliver,
             defaults: defaults)
         self.housekeeping = Housekeeping(presence: presence, store: store, settings: settings)
     }
@@ -281,7 +296,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
 
         UNUserNotificationCenter.current().delegate = self
-        Notifier.registerCategories()
+        model.notifier.registerCategories()
         Task { @MainActor in
             model.start()
             // Before anything else it might ask for: an inbox that is not

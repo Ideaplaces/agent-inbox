@@ -6,10 +6,15 @@ import Foundation
 final class UsageReporter {
     private let settings: AppSettings
     private let sleeper: any Sleeper
+    private let sender: any EventSender
 
-    init(settings: AppSettings, sleeper: any Sleeper = RealSleeper()) {
+    init(
+        settings: AppSettings, sleeper: any Sleeper = RealSleeper(),
+        sender: any EventSender = URLSessionEventSender()
+    ) {
         self.settings = settings
         self.sleeper = sleeper
+        self.sender = sender
     }
 
     /// Tally one arrival. Kind only, and only in memory on this Mac until a
@@ -33,7 +38,7 @@ final class UsageReporter {
         guard Analytics.shouldSend(last: settings.analyticsLastSent, now: now) else { return }
 
         let os = ProcessInfo.processInfo.operatingSystemVersion
-        Analytics.send(Analytics.payload(
+        let payload = Analytics.payload(
             distinctID: settings.analyticsID,
             appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "",
             osVersion: "\(os.majorVersion).\(os.minorVersion)",
@@ -41,7 +46,8 @@ final class UsageReporter {
             needsYou: settings.pendingNeedsYou,
             watchMode: settings.watchMode,
             selfHosted: settings.ntfyServer != AppSettings.publicNtfyServer,
-            customTags: settings.watchTags != AppSettings.defaultWatchTags))
+            customTags: settings.watchTags != AppSettings.defaultWatchTags)
+        if let request = Analytics.request(for: payload) { sender.send(request) }
 
         settings.analyticsLastSent = now
         settings.pendingFinished = 0

@@ -1,17 +1,47 @@
 import Foundation
 import UserNotifications
 
+/// The two calls this app makes into `UNUserNotificationCenter`.
+///
+/// Behind a protocol because the real center cannot be reached from a test at
+/// all: `current()` aborts in a process with no app bundle around it. Everything
+/// that decides what a banner says is settled before it gets here, so this is
+/// the whole seam, and a test can hold the request and read it.
+protocol NotificationPosting {
+    func add(_ request: UNNotificationRequest)
+    func setCategories(_ categories: Set<UNNotificationCategory>)
+}
+
+/// The real center, looked up on every call rather than held. Constructing this
+/// must stay free of side effects so a default-built model can exist in a test
+/// process; only a post touches the system.
+struct SystemNotificationCenter: NotificationPosting {
+    func add(_ request: UNNotificationRequest) {
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    func setCategories(_ categories: Set<UNNotificationCategory>) {
+        UNUserNotificationCenter.current().setNotificationCategories(categories)
+    }
+}
+
 /// Native notifications, with the two actions that actually matter on a
 /// notification about an agent: go to it, or acknowledge it.
-enum Notifier {
+struct Notifier {
     static let categoryID = "AGENT_INBOX_ITEM"
     static let readAction = "MARK_READ"
 
-    static func registerCategories() {
-        let read = UNNotificationAction(identifier: readAction, title: "Mark Read", options: [])
+    let poster: any NotificationPosting
+
+    init(poster: any NotificationPosting = SystemNotificationCenter()) {
+        self.poster = poster
+    }
+
+    func registerCategories() {
+        let read = UNNotificationAction(identifier: Self.readAction, title: "Mark Read", options: [])
         let category = UNNotificationCategory(
-            identifier: categoryID, actions: [read], intentIdentifiers: [], options: [])
-        UNUserNotificationCenter.current().setNotificationCategories([category])
+            identifier: Self.categoryID, actions: [read], intentIdentifiers: [], options: [])
+        poster.setCategories([category])
     }
 
     static func requestAuthorization() async -> Bool {
@@ -19,7 +49,7 @@ enum Notifier {
             .requestAuthorization(options: [.alert, .sound, .badge])) ?? false
     }
 
-    static func post(_ item: InboxItem, soundName: String) {
+    func post(_ item: InboxItem, soundName: String) {
         let content = UNMutableNotificationContent()
         content.title = "\(item.kind.symbol) \(item.titleLine)"
 
@@ -32,7 +62,7 @@ enum Notifier {
         // A banner is plain text, so markers would show as literal ** and `.
         content.body = MarkdownText.plain(lines.joined(separator: "\n"))
 
-        content.categoryIdentifier = categoryID
+        content.categoryIdentifier = Self.categoryID
         content.userInfo = ["itemID": item.id]
         // Group by repo so a chatty session collapses instead of stacking.
         content.threadIdentifier = item.repo
@@ -40,8 +70,6 @@ enum Notifier {
             content.sound = UNNotificationSound(named: UNNotificationSoundName(soundName))
         }
 
-        let request = UNNotificationRequest(
-            identifier: item.id, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
+        poster.add(UNNotificationRequest(identifier: item.id, content: content, trigger: nil))
     }
 }

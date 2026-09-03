@@ -1,4 +1,5 @@
 import Foundation
+import UserNotifications
 @testable import AgentInbox
 
 /// Secrets that live and die with the process, so no test touches the login
@@ -37,17 +38,32 @@ final class MemoryDefaults: UserDefaults {
     override func synchronize() -> Bool { true }
 }
 
-/// Everything an `AppSettings` or an `AppModel` needs in order to read and
-/// write nothing real: in-memory defaults, in-memory secrets, and a scratch
-/// directory in place of `~/.agent-inbox`.
+/// Banners as data.
 ///
-/// The first two are handed in. The directory is the one static left,
+/// Also what keeps a test model from aborting: `UNUserNotificationCenter
+/// .current()` cannot be called in a process without an app bundle, so the
+/// first item delivered through a model built with the real center would
+/// take the whole test run down with it.
+final class RecordingPoster: NotificationPosting {
+    private(set) var requests: [UNNotificationRequest] = []
+    private(set) var categories: Set<UNNotificationCategory> = []
+
+    func add(_ request: UNNotificationRequest) { requests.append(request) }
+    func setCategories(_ categories: Set<UNNotificationCategory>) { self.categories = categories }
+}
+
+/// Everything an `AppSettings` or an `AppModel` needs in order to read and
+/// write nothing real: in-memory defaults, in-memory secrets, a recording
+/// notification poster, and a scratch directory in place of `~/.agent-inbox`.
+///
+/// The first three are handed in. The directory is the one static left,
 /// `SenderConfig.directory`, because the files under it are the contract with
 /// the bash senders and are found by path; `remove()` belongs in `tearDown`.
 @MainActor
 final class IsolatedSettings {
     let defaults = MemoryDefaults()
     let secrets = MemorySecrets()
+    let poster = RecordingPoster()
     let directory: URL
 
     init(_ label: String = "test") {
@@ -61,7 +77,7 @@ final class IsolatedSettings {
     }
 
     func model() -> AppModel {
-        AppModel(settings: settings(), defaults: defaults)
+        AppModel(settings: settings(), defaults: defaults, poster: poster)
     }
 
     func remove() {

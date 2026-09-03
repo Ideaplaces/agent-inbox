@@ -71,15 +71,35 @@ enum Analytics {
         ]
     }
 
-    /// Post it, and never let it matter. An analytics endpoint having a bad day
-    /// is not a reason for anything here to behave differently.
-    static func send(_ payload: [String: Any], session: URLSession = .shared) {
-        guard let body = try? JSONSerialization.data(withJSONObject: payload) else { return }
+    /// The event as a request, ready to hand to an `EventSender`. nil only if
+    /// the payload cannot be serialised, which for a dictionary of counts and
+    /// flags means a programming error, not a condition to report.
+    static func request(for payload: [String: Any]) -> URLRequest? {
+        guard let body = try? JSONSerialization.data(withJSONObject: payload) else { return nil }
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = body
         request.timeoutInterval = 10
+        return request
+    }
+}
+
+/// Where the daily event goes. A protocol rather than a `URLSession` because
+/// a session offers no way to look at what was sent short of a `URLProtocol`
+/// subclass, and the test that matters here reads the body of the one request
+/// and checks its keys.
+protocol EventSender {
+    func send(_ request: URLRequest)
+}
+
+/// Post it, and never let it matter. An analytics endpoint having a bad day
+/// is not a reason for anything here to behave differently, so the response
+/// is not even read.
+struct URLSessionEventSender: EventSender {
+    var session: URLSession = .shared
+
+    func send(_ request: URLRequest) {
         session.dataTask(with: request).resume()
     }
 }
