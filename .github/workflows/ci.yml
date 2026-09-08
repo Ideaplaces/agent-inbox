@@ -83,20 +83,20 @@ jobs:
         run: ./test-notify.sh
 
   notify:
-    name: Discord CI status
+    name: Notify on failure
     needs: [mac-app, mac-app-fork, shell]
     # One of the two mac jobs is always skipped, and a skipped dependency would
-    # skip this too. Run on always() and derive the status from the results
-    # instead: a skipped job counts as success, only real failures post, and
-    # a green run deletes the failure it posted earlier.
-    if: always()
+    # skip this too. Ask about actual failures instead.
+    if: ${{ always() && contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: Ideaplaces/discord-ci-status@v1
-        with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK_CICD }}
-          bot-token: ${{ secrets.DISCORD_BOT_TOKEN }}
-          status: ${{ contains(needs.*.result, 'failure') && 'failure' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'success' }}
-          title: agent-inbox CI failed
-          mention: "<@908834861526175844>"
+      - name: Post to Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_CICD }}
+        run: |
+          [ -n "$WEBHOOK" ] || exit 0
+          curl -m 10 -s -H 'Content-Type: application/json' -d @- "$WEBHOOK" <<JSON
+          {"embeds":[{"title":"agent-inbox CI failed","color":15158332,
+          "description":"[${GITHUB_REF_NAME}](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) failed on \`${GITHUB_SHA:0:7}\`"}]}
+          JSON
