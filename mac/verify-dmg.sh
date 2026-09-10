@@ -40,12 +40,24 @@ BUILD="$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$PLIST")"
 # be well above that.
 [ "$BUILD" -gt 1000 ] 2>/dev/null && ok "build number $BUILD rises with the version" || fail "build number is $BUILD; Sparkle will never offer this as an update"
 
-# Strict when a real identity signed it; an ad-hoc local build has no
-# authority chain and would fail --strict for reasons that say nothing.
+# Never --strict. hdiutil makehybrid stamps Finder info on every file, the
+# volume reports it as com.apple.FinderInfo, and --strict rejects it as
+# "detritus" on Sparkle's Autoupdate. The shipped, notarized 0.1.30 fails
+# --strict for exactly this while spctl accepts it, so strict here would fail
+# every release for a reason Apple does not care about. --deep without it is
+# what Gatekeeper actually checks.
 if [ -n "${SIGN_IDENTITY:-}" ]; then
-  codesign --verify --deep --strict "$APP" && ok "signature verifies (strict)" || fail "signature does not verify"
-  codesign -dv "$APP" 2>&1 | grep -q "Authority=Developer ID Application" \
-    && ok "signed with a Developer ID" || fail "not signed with a Developer ID"
+  codesign --verify --deep "$APP" && ok "signature verifies" || fail "signature does not verify"
+  # The authority chain prints only at verbose=2; plain -dv omits it. And it is
+  # captured first rather than piped into grep -q: under pipefail, grep -q
+  # closing the pipe on its first match gives codesign a SIGPIPE on the lines
+  # still to come and the whole pipeline reads as failed. Both of those failed
+  # this check against the shipped, notarized 0.1.30 before it was right.
+  AUTHORITY="$(codesign -dv --verbose=2 "$APP" 2>&1)"
+  case "$AUTHORITY" in
+    *"Authority=Developer ID Application"*) ok "signed with a Developer ID" ;;
+    *) fail "not signed with a Developer ID" ;;
+  esac
 else
   codesign --verify "$APP" && ok "signature verifies (ad-hoc, local build)" || fail "signature does not verify"
 fi
