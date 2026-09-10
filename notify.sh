@@ -170,6 +170,11 @@ last_assistant_text() { # $1 max chars
 # closing line of `};` identifies nothing. Line ends count as sentence ends,
 # because an agent writes in short lines, headings and bullets that often carry
 # no full stop at all.
+# The per-sentence cap is a parameter only so a test can shrink it and reach
+# the clipping path; production always takes the default. shellcheck 0.9,
+# which the Ubuntu CI runner ships, flags an argument nothing passes (SC2120);
+# 0.11 on a current Mac does not, so a clean local run says nothing about CI.
+# shellcheck disable=SC2120
 closing_words() { # $1 = max chars per sentence, default 160
   last_assistant_text 8000 | awk -v max="${1:-160}" '
     function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
