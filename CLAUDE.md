@@ -241,6 +241,16 @@ docs.ideaplaces.com/devops/macos-app-signing.
   older one and turned every push red for a week while the Mac said clean.
   chipdev has 0.8.0, which is the stricter check: run a script through it
   before trusting a green local run.
+- **CI was red for a week and Discord never said so.** The notify job called a
+  shared action that treats a missing webhook as "nothing to do" and exits
+  green, and the secret had never been set on this repo. Every failing run
+  ended with a green Discord job whose log said `no webhook configured`. The
+  notify jobs in `ci.yml` and `release.yml` are plain curl now, and a missing
+  `DISCORD_WEBHOOK_AGENT_INBOX_PRODUCTION` fails the job instead of passing
+  it. The channel is `#agent-inbox-production`, created by
+  `ideaplaces-devops/discord/setup-cicd-notifications.sh`; the webhook is in
+  Key Vault as `discord-webhook-agent-inbox-production`. A notifier that
+  cannot notify must go red, because nobody opens the log of a green job.
 - **Test the binary you think you are testing.** A `--configure` flag appeared to
   hang through several rounds of debugging because `/Applications` held the
   released build, which predated the flag.

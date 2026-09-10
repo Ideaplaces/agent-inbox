@@ -176,3 +176,36 @@ jobs:
             git commit -m "Publish appcast and screenshots for ${GITHUB_REF_NAME}"
             git push origin main
           fi
+
+  notify:
+    name: Discord release status
+    needs: [release]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_AGENT_INBOX_PRODUCTION }}
+      RESULT: ${{ needs.release.result }}
+    steps:
+      # Same rule as CI: no webhook is a failure, not a quiet exit. A release
+      # that dies after the tag is pushed is invisible from the Mac, and the
+      # v0.1.31 that failed at Verify DMG was only noticed because someone was
+      # watching the run.
+      - name: Refuse to run without a webhook
+        if: env.WEBHOOK == ''
+        run: |
+          echo "DISCORD_WEBHOOK_AGENT_INBOX_PRODUCTION is not set on this repo." >&2
+          exit 1
+
+      - name: Post the failure
+        if: env.RESULT == 'failure'
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          payload="$(jq -nc --arg tag "$TAG" --arg url "$RUN_URL" \
+            '{content: "<@908834861526175844>",
+              embeds: [{title: (":x: agent-inbox release " + $tag + " failed"),
+                        description: "Nothing was published. The tag is still pointing at the failed commit; fix, delete the tag, and push it again.",
+                        url: $url, color: 15158332}]}')"
+          curl -sf -X POST "$WEBHOOK" -H "Content-Type: application/json" -d "$payload"

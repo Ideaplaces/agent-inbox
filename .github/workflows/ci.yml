@@ -106,17 +106,44 @@ jobs:
     name: Discord CI status
     needs: [mac-app, mac-app-fork, shell]
     # One of the two mac jobs is always skipped, and a skipped dependency would
-    # skip this too. Run on always() and derive the status from the results
-    # instead: a skipped job counts as success, only real failures post, and
-    # a green run deletes the failure it posted earlier.
+    # skip this too. Run on always() and read the results instead: a skipped
+    # job counts as success and only a real failure posts.
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_AGENT_INBOX_PRODUCTION }}
+      FAILED: ${{ contains(needs.*.result, 'failure') }}
     steps:
-      - uses: Ideaplaces/discord-ci-status@v1
-        with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK_CICD }}
-          bot-token: ${{ secrets.DISCORD_BOT_TOKEN }}
-          status: ${{ contains(needs.*.result, 'failure') && 'failure' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'success' }}
-          title: agent-inbox CI failed
-          mention: "<@908834861526175844>"
+      # A notifier that cannot notify is itself a failure. The old step, and
+      # the shared action it called, treated a missing webhook as "nothing to
+      # do" and passed; CI was red for a week with the secret never set on this
+      # repo, and every green Discord job said so in a log nobody opens.
+      - name: Refuse to run without a webhook
+        if: env.WEBHOOK == ''
+        run: |
+          echo "DISCORD_WEBHOOK_AGENT_INBOX_PRODUCTION is not set on this repo." >&2
+          echo "Run ideaplaces-devops/discord/setup-cicd-notifications.sh agent-inbox agent-inbox --production-only" >&2
+          exit 1
+
+      - name: Post the failure
+        if: env.FAILED == 'true'
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          MESSAGE: ${{ github.event.head_commit.message }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ACTOR: ${{ github.actor }}
+          SHA: ${{ github.sha }}
+        run: |
+          failed="$(echo "$NEEDS" | jq -r 'to_entries[] | select(.value.result=="failure") | .key' | paste -sd, -)"
+          payload="$(jq -nc \
+            --arg title ":x: agent-inbox CI failed" \
+            --arg desc "$MESSAGE" --arg jobs "$failed" --arg url "$RUN_URL" \
+            --arg who "$ACTOR" --arg sha "$SHA" \
+            '{content: "<@908834861526175844>",
+              embeds: [{title: $title, description: ("**" + ($desc | split("\n")[0]) + "**"),
+                        url: $url, color: 15158332,
+                        fields: [{name: "Failed jobs", value: $jobs, inline: true},
+                                 {name: "Commit", value: $sha[0:7], inline: true},
+                                 {name: "By", value: $who, inline: true}]}]}')"
+          curl -sf -X POST "$WEBHOOK" -H "Content-Type: application/json" -d "$payload"
