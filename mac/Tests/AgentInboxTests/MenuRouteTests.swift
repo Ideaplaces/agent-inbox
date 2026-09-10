@@ -34,8 +34,8 @@ final class MenuRouteTests: XCTestCase {
 
     func testSettingsAndBackAreBothReachable() {
         let m = model()
-        m.menuRoute = .settings
-        XCTAssertEqual(m.menuRoute, .settings)
+        m.menuRoute = .settings(.transport)
+        XCTAssertEqual(m.menuRoute, .settings(.transport))
         m.menuRoute = .inbox
         XCTAssertEqual(m.menuRoute, .inbox)
     }

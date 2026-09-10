@@ -214,6 +214,33 @@ docs.ideaplaces.com/devops/macos-app-signing.
   bash 3.2. Any change to how hooks are written must keep
   `HookInstaller.swift` and both shell installers in agreement; the test's
   `app_shape_ok` asserts it.
+- **The README screenshots are generated, checked in CI, and re-committed by
+  every release.** `mac/screenshots.sh --write` regenerates `docs/*.png` from
+  the views with every varying input pinned; `--check` renders into a temp
+  directory and fails the push if `docs/` differs or the README links an image
+  nothing generates. It runs only on the self-hosted Mac: the images are
+  byte-exact to that machine's SDK and fonts. The version in the pictures is a
+  fixed `1.0.0` on purpose, because the release runner rewrites `VERSION` from
+  the tag while the file in git stays behind, and a picture tracking either
+  would fail the check on the first push after every release.
+- **A settings capture must be sized to the view's own fitting height.**
+  Forcing a taller frame makes the scroll view fill the slack by scrolling and
+  the picture comes out mid-page with the header and tabs cut off.
+- **`IsolatedSettings` redirects `HookInstaller.settingsURL` too.** It did not
+  for a while, so an "isolated" model read this Mac's real
+  `~/.claude/settings.json` and the Machines screenshot carried a warning about
+  the maintainer's own hooks. Two statics are redirected into the scratch
+  directory; a third one would be a test reading something real again.
+- **`mac/verify-dmg.sh` reads a built image back the way Finder and Sparkle
+  will**, and runs in CI after packaging and in the release before publishing.
+  A probe that pipes its output through `tail` loses the exit code; call it
+  bare. Stray `/Volumes/Agent Inbox N` mounts on a dev Mac are from hand
+  probing, not from it: it detaches in a trap on every path.
+- **Local shellcheck says nothing about CI's.** Ubuntu's runner ships 0.9.0,
+  a current Mac 0.11. SC2120 (an argument nothing passes) exists only in the
+  older one and turned every push red for a week while the Mac said clean.
+  chipdev has 0.8.0, which is the stricter check: run a script through it
+  before trusting a green local run.
 - **Test the binary you think you are testing.** A `--configure` flag appeared to
   hang through several rounds of debugging because `/Applications` held the
   released build, which predated the flag.

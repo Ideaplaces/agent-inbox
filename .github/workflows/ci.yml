@@ -32,6 +32,14 @@ jobs:
         working-directory: mac
         run: swift test
 
+      # The README pictures are generated from the views, and this fails the
+      # push when the views moved and the pictures did not. Only here: the
+      # images are byte-exact to this machine's SDK and fonts, so the hosted
+      # fork job below, one SDK behind, would fail on every pixel.
+      - name: Screenshots are current
+        working-directory: mac
+        run: ./screenshots.sh --check
+
       - name: Build
         working-directory: mac
         run: ./build.sh
@@ -39,6 +47,12 @@ jobs:
       - name: Package
         working-directory: mac
         run: ./package-dmg.sh
+
+      # Read the image back the way Finder and Sparkle will. Every failure in
+      # this pipeline has shipped as a healthy-looking DMG.
+      - name: Verify DMG
+        working-directory: mac
+        run: ./verify-dmg.sh build/*.dmg
 
       - uses: actions/upload-artifact@v4
         with:

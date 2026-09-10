@@ -56,9 +56,13 @@ final class RecordingPoster: NotificationPosting {
 /// write nothing real: in-memory defaults, in-memory secrets, a recording
 /// notification poster, and a scratch directory in place of `~/.agent-inbox`.
 ///
-/// The first three are handed in. The directory is the one static left,
-/// `SenderConfig.directory`, because the files under it are the contract with
-/// the bash senders and are found by path; `remove()` belongs in `tearDown`.
+/// The first three are handed in. Two statics remain, both redirected here
+/// into the same scratch directory: `SenderConfig.directory`, because the
+/// files under it are the contract with the bash senders and are found by
+/// path, and `HookInstaller.settingsURL`, the `~/.claude/settings.json` the
+/// hook installer edits. The second was missed for a while, so an "isolated"
+/// model still read this Mac's real hooks and the Machines screenshot carried
+/// a warning about them. `remove()` belongs in `tearDown`.
 @MainActor
 final class IsolatedSettings {
     let defaults = MemoryDefaults()
@@ -70,6 +74,7 @@ final class IsolatedSettings {
         directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("agent-inbox-\(label)-\(UUID().uuidString)")
         SenderConfig.directory = directory
+        HookInstaller.settingsURL = directory.appendingPathComponent("claude-settings.json")
     }
 
     func settings() -> AppSettings {

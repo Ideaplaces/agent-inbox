@@ -3,9 +3,9 @@ import Foundation
 import Observation
 import UserNotifications
 
-enum MenuRoute {
+enum MenuRoute: Equatable {
     case inbox
-    case settings
+    case settings(SettingsPanes.Pane)
 }
 
 /// Everything with a lifetime longer than a view, in one place.

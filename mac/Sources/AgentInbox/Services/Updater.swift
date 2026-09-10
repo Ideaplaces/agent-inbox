@@ -54,7 +54,11 @@ final class Updater {
         // XCTest it is the test host, whose version has nothing to do with this
         // app: the generated settings screenshot read "Version 16.0", which in a
         // README looks like a bug in the app rather than in the capture.
-        if NSClassFromString("XCTestCase") != nil { return "0.0.0" }
+        // "0.0.0" is itself a tell in a README, so a capture can name the
+        // version it wants to show. Environment only; nothing ships reading it.
+        if NSClassFromString("XCTestCase") != nil {
+            return ProcessInfo.processInfo.environment["AGENT_INBOX_SHOWN_VERSION"] ?? "0.0.0"
+        }
         return Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
             ?? "?"
     }

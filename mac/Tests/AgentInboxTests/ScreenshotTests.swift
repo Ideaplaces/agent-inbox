@@ -28,15 +28,25 @@ final class ScreenshotTests: XCTestCase {
         ProcessInfo.processInfo.environment["AGENT_INBOX_WRITE_SCREENSHOTS"] == "1"
     }
 
-    /// `docs/` at the repo root, four levels up from this file.
+    /// Where the images go: `docs/` at the repo root, four levels up from this
+    /// file, unless the drift check points somewhere disposable.
     private var docs: URL {
-        URL(fileURLWithPath: #filePath)
+        if let dir = ProcessInfo.processInfo.environment["AGENT_INBOX_SCREENSHOT_DIR"] {
+            return URL(fileURLWithPath: dir)
+        }
+        return URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // AgentInboxTests
             .deletingLastPathComponent()   // Tests
             .deletingLastPathComponent()   // mac
             .deletingLastPathComponent()   // repo root
             .appendingPathComponent("docs")
     }
+
+    /// Everything that could make two runs differ, pinned. A screenshot that
+    /// changes when nothing changed is a drift check that cries wolf, and one
+    /// that carries the maintainer's machine name is a README that leaks it.
+    private static let timeZone = TimeZone(identifier: "America/Toronto")!
+    private static let locale = Locale(identifier: "en_US")
 
     /// Host `view` in an offscreen window and write its layer to `docs/<name>.png`.
     private func capture(_ view: some View, width: CGFloat, height: CGFloat? = nil,
@@ -49,7 +59,10 @@ final class ScreenshotTests: XCTestCase {
         // the result looks like the text failed to draw. Only explicitly
         // coloured text survives, which is a very convincing wrong diagnosis.
         let host = NSHostingView(
-            rootView: AnyView(view.background(Color(nsColor: .windowBackgroundColor))))
+            rootView: AnyView(
+                view.background(Color(nsColor: .windowBackgroundColor))
+                    .environment(\.timeZone, Self.timeZone)
+                    .environment(\.locale, Self.locale)))
         let fitted = height ?? host.fittingSize.height
         host.frame = NSRect(x: 0, y: 0, width: width, height: fitted)
 
@@ -67,9 +80,6 @@ final class ScreenshotTests: XCTestCase {
         // unclipped at the view's origin, so every placeholder appears beside
         // its box as though the value had been printed twice.
         window.makeKeyAndOrderFront(nil)
-        // Let SwiftUI settle. The list's height comes from a measurement that
-        // lands on the pass after the one that asked for it, so a single pass
-        // renders it empty.
         // Let SwiftUI settle. The list's height comes from a measurement that
         // lands on the pass after the one that asked for it, so capturing
         // immediately renders an empty box where the rows belong.
@@ -112,6 +122,12 @@ final class ScreenshotTests: XCTestCase {
         let model = scratch.model()
         model.settings.transport = .ntfy
         model.settings.ntfyTopic = "agent-inbox-you-2f8a1c94b7e0"
+        // Not Host.current(): that is this Mac's name, and it went into a
+        // public README once.
+        model.settings.hostLabel = "laptop"
+        // A set-up Mac, in the scratch settings file: hooks present, all ours.
+        model.installHooks()
+        model.transientMessage = nil
         // The suite is fresh, so the server is the default and the Transport
         // pane draws ntfy.sh, on which the token row is not rendered at all.
         // Before the suite was isolated this test once committed a stray
@@ -171,19 +187,19 @@ final class ScreenshotTests: XCTestCase {
             MenuContentView().environment(model(withItems: [])),
             width: 560, named: "menubar-empty")
 
-        // The panes on their own rather than SettingsView, which is a TabView:
-        // its tab strip does not draw in a bare hosting view, and asking the
-        // TabView for a fitting size stacks every tab's content together, which
-        // lays the controls out at a size no window would give them.
-        try capture(
-            GeneralSettings().environment(model(withItems: [])),
-            width: 520, named: "settings-general")
-        try capture(
-            TransportSettings().environment(model(withItems: [])),
-            width: 520, named: "settings-transport")
-        try capture(
-            MachineSettings().environment(model(withItems: [])),
-            width: 520, named: "settings-machines")
+        // Settings as a person reaches them: a page inside the popover, with
+        // the back chevron and the segmented tabs, one capture per pane. Sized
+        // to the view's own fitting height, exactly as the popover sizes
+        // itself; forcing a taller frame makes the scroll view fill the slack
+        // by scrolling, and the capture comes out mid-page with the header
+        // and the tabs cut off.
+        for pane in SettingsPanes.Pane.allCases {
+            let m = model(withItems: [])
+            m.menuRoute = .settings(pane)
+            try capture(
+                MenuContentView().environment(m),
+                width: 560, named: "menu-settings-\(pane.rawValue.lowercased())")
+        }
 
         try capture(
             WelcomeView().environment(model(withItems: [])),

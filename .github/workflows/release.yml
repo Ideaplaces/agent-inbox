@@ -132,6 +132,22 @@ jobs:
         working-directory: mac
         run: cp "build/AgentInbox-$(cat VERSION).dmg" build/AgentInbox.dmg
 
+      # Fail here, before anything is published, if the image is not what a
+      # person should get.
+      - name: Verify DMG
+        working-directory: mac
+        env:
+          SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: ./verify-dmg.sh "build/AgentInbox-$(cat VERSION).dmg"
+
+      # Pictures of the build that is about to ship, committed beside the
+      # appcast below, so main always shows the release it points at.
+      - name: Screenshots of this build
+        working-directory: mac
+        run: |
+          ./screenshots.sh --write
+          mkdir -p "$RUNNER_TEMP/docs" && cp ../docs/*.png "$RUNNER_TEMP/docs/"
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
@@ -142,7 +158,7 @@ jobs:
       # Committing it to main is enough: the app checks the EdDSA signature
       # against its own Info.plist, so the host does not have to be trusted.
       # Runs after the release so the URLs in the feed already resolve.
-      - name: Publish the appcast
+      - name: Publish the appcast and the screenshots
         if: env.SPARKLE_PRIVATE_KEY != ''
         run: |
           [ -f appcast.xml ] || { echo "no appcast was generated" >&2; exit 1; }
@@ -150,12 +166,13 @@ jobs:
           git fetch --depth=1 origin main
           git checkout -B main FETCH_HEAD
           cp "$RUNNER_TEMP/appcast.xml" appcast.xml
+          cp "$RUNNER_TEMP"/docs/*.png docs/
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add appcast.xml
+          git add appcast.xml docs/*.png
           if git diff --cached --quiet; then
-            echo "appcast unchanged"
+            echo "appcast and screenshots unchanged"
           else
-            git commit -m "Publish appcast for ${GITHUB_REF_NAME}"
+            git commit -m "Publish appcast and screenshots for ${GITHUB_REF_NAME}"
             git push origin main
           fi

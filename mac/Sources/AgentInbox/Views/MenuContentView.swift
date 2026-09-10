@@ -52,10 +52,10 @@ struct MenuContentView: View {
                 } else {
                     itemList
                 }
-            case .settings:
+            case .settings(let pane):
                 settingsHeader
                 Divider()
-                settingsBody
+                settingsBody(pane)
             }
 
             if let message = model.transientMessage {
@@ -99,9 +99,9 @@ struct MenuContentView: View {
     /// ScrollView has no height of its own, and inside a popover that sizes
     /// itself to its content nothing establishes a floor, so it can be handed
     /// zero and simply not draw.
-    private var settingsBody: some View {
+    private func settingsBody(_ pane: SettingsPanes.Pane) -> some View {
         ScrollView {
-            SettingsPanes()
+            SettingsPanes(initialPane: pane)
                 .background(
                     GeometryReader { proxy in
                         Color.clear.preference(key: ContentHeightKey.self, value: proxy.size.height)
@@ -221,7 +221,7 @@ struct MenuContentView: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            if model.menuRoute == .inbox {
+            if case .inbox = model.menuRoute {
                 Button("Mark All Read") { model.store.markAllRead() }
                     .disabled(!model.store.hasUnread)
                 if model.settings.historyURL != nil {
@@ -231,9 +231,9 @@ struct MenuContentView: View {
             Spacer()
             Button("Check for Updates") { model.updater.checkForUpdates() }
                 .disabled(!model.updater.canCheck)
-            if model.menuRoute == .inbox {
+            if case .inbox = model.menuRoute {
                 Button {
-                    model.menuRoute = .settings
+                    model.menuRoute = .settings(.general)
                 } label: {
                     Image(systemName: "gearshape")
                 }
@@ -313,7 +313,7 @@ private struct ItemRow: View {
                             .note(.tertiary)
                         // Styled on its own, or it inherits the note's grey and
                         // stops looking like something you can click.
-                        Button("Settings") { model.menuRoute = .settings }
+                        Button("Settings") { model.menuRoute = .settings(.general) }
                             .buttonStyle(.link)
                             .font(.system(size: 10))
                     }

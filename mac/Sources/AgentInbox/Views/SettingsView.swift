@@ -11,7 +11,13 @@ import SwiftUI
 @MainActor
 struct SettingsPanes: View {
     @Environment(AppModel.self) private var model
-    @State private var pane: Pane = .general
+    @State private var pane: Pane
+
+    /// General unless told otherwise. The parameter exists so the screenshots
+    /// can picture each pane as a person reaches it, inside the popover.
+    init(initialPane: Pane = .general) {
+        _pane = State(initialValue: initialPane)
+    }
 
     enum Pane: String, CaseIterable, Identifiable {
         case general = "General"

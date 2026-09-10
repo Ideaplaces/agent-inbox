@@ -326,13 +326,17 @@ the hooks here and give you the line to paste on your other machines.
 
 ![The setup window](docs/welcome.png)
 
-Settings, in three tabs.
+Settings are a page inside the menu, with a way back and three panes. There is no
+separate window, so opening them can never land on another Space.
 
-![General settings](docs/settings-general.png)
+![General: login item, usage data, sound, updates, expiry and the turn-length floor](docs/menu-settings-general.png)
 
-![Transport settings](docs/settings-transport.png)
+![Transport: the ntfy topic, server and connection status](docs/menu-settings-transport.png)
 
-![The machines that have reported in](docs/settings-machines.png)
+![Machines: this Mac's hooks and the one line for every other machine](docs/menu-settings-machines.png)
+
+Every image in this README is generated from the shipping views by `mac/screenshots.sh`,
+and CI fails when they no longer match the code, so what you see here is what runs.
 
 ## Config
 
