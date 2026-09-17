@@ -251,6 +251,14 @@ docs.ideaplaces.com/devops/macos-app-signing.
   `ideaplaces-devops/discord/setup-cicd-notifications.sh`; the webhook is in
   Key Vault as `discord-webhook-agent-inbox-production`. A notifier that
   cannot notify must go red, because nobody opens the log of a green job.
+- **The Stop hook fires before the transcript has the turn's last message.**
+  Measured on Claude Code 2.1.274: the file was seven lines short when the hook
+  started and complete 200ms later. Reading the transcript there finds the
+  previous message, so every row was one message in the past, most visibly on a
+  short turn with no tool calls. The payload's `last_assistant_message` is the
+  turn that ended; the transcript is only the fallback for older versions and
+  for the Notification hook. Never sleep-and-reread to fix this: the hook must
+  not block a session.
 - **Test the binary you think you are testing.** A `--configure` flag appeared to
   hang through several rounds of debugging because `/Applications` held the
   released build, which predated the flag.

@@ -149,9 +149,23 @@ should_report() {
   return 0
 }
 
-# Last non-empty assistant text in the transcript. fromjson? tolerates the
-# line tail may have truncated and skips tool-call-only entries.
+# The agent's last message, from the hook payload when it carries one.
+#
+# The Stop hook fires before Claude Code has written the turn's final message
+# to the transcript (measured on 2.1.274: seven lines short when the hook
+# starts, complete 200ms later), so the transcript's last assistant text at
+# that moment is the previous message, and the inbox ran one message in the
+# past. The payload's last_assistant_message is the turn that just ended.
+#
+# The transcript stays as the fallback: older Claude Code sends no such field,
+# and neither does the Notification hook, which fires long after the write.
+# fromjson? tolerates the line tail may have truncated and skips
+# tool-call-only entries.
 last_assistant_text() { # $1 max chars
+  if [ -n "${LAST_MESSAGE:-}" ]; then
+    printf '%s' "$LAST_MESSAGE" | head -c "$1"
+    return 0
+  fi
   [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ] || return 0
   tail -n 300 "$TRANSCRIPT" | jq -Rrs '[split("\n")[] | fromjson? | select(.type=="assistant") | .message.content | if type=="array" then ([.[] | select(.type=="text") | .text] | join("\n")) else tostring end | select(length>0)] | last // ""' 2>/dev/null | head -c "$1"
 }
@@ -392,6 +406,7 @@ INPUT="$(cat)"
 SESSION_ID="$(printf '%s' "$INPUT" | jq -r '.session_id // empty')"
 CWD="$(printf '%s' "$INPUT" | jq -r '.cwd // empty')"
 TRANSCRIPT="$(printf '%s' "$INPUT" | jq -r '.transcript_path // empty')"
+LAST_MESSAGE="$(printf '%s' "$INPUT" | jq -r '.last_assistant_message // empty | strings')"
 REPO="$(basename "${CWD:-unknown}")"
 # AGENT_INBOX_NOW is a test seam: it pins "now" so a fixture's elapsed time is
 # the same on every run. Environment only, never read from config, so nothing

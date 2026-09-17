@@ -792,5 +792,34 @@ else
 fi
 rm -rf "$FX"
 
+# --- the closing words come from the turn that just ended, not the one before ---
+#
+# Claude Code fires the Stop hook before it has written the turn's final message
+# to the transcript: measured on 2.1.274, the file was seven lines short at the
+# moment the hook started and complete 200ms later. Reading the transcript there
+# finds the previous message, so every row in the inbox was one message in the
+# past. The hook payload carries the message itself, and that is what is read.
+new_home
+STALE="$SANDBOX/stale.jsonl"
+cat > "$STALE" <<'JSONL'
+{"type":"user","message":{"content":"first ask"}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"Promoted and verified. Say when you want to take the next one."}]}}
+{"type":"user","message":{"content":"which one is next"}}
+JSONL
+out="$(run stop "$(jq -nc --arg t "$STALE" '{session_id:"late1",cwd:"/tmp/repo",transcript_path:$t,last_assistant_message:"It is PR C. Want me to take it now?"}')")"
+[ "$(field "$out" .closing)" = "It is PR C. Want me to take it now?" ] \
+  && ok "a stop reports the message in the payload, not the stale transcript" \
+  || fail "a stop reports the message in the payload, not the stale transcript" "got: $(field "$out" .closing)"
+[ "$(field "$out" .ask)" = "which one is next" ] \
+  && ok "and still pairs it with the ask that prompted it" \
+  || fail "and still pairs it with the ask that prompted it" "got: $(field "$out" .ask)"
+
+# Older Claude Code sends no such field, and the transcript is all there is.
+out="$(run stop "$(jq -nc --arg t "$STALE" '{session_id:"late2",cwd:"/tmp/repo",transcript_path:$t}')")"
+case "$(field "$out" .closing)" in
+  "Promoted and verified."*) ok "with no message in the payload the transcript is still read";;
+  *) fail "with no message in the payload the transcript is still read" "got: $(field "$out" .closing)";;
+esac
+
 echo
 echo "$PASS checks passed"
