@@ -286,9 +286,47 @@ written:
 When a change alters what a notification means, the tables in "What a
 notification looks like" are the first thing to reread, not the last.
 
+## When to tag a release
+
+**A fix is not shipped until it is tagged.** The hook runs the `notify.sh` the
+app unpacks from its bundle, so a sender fix on `main` reaches nobody until a
+build carries it. Tag as part of the work, without being asked. The rule was
+written on the day a fix for rows running one message in the past sat on `main`
+untagged until someone asked whether it had gone out.
+
+What earns a version:
+
+- A bug fix a user would notice, like that one.
+- A significant feature.
+
+Refactors, tests, docs and CI changes do not. They ride along with the next
+version that has a reason to exist.
+
+**Keep the count down.** Every version is an update prompt on every installed
+copy. On an active day with several fixes landing, batch them: check what has
+already gone out today (`gh release list --limit 5`), and if there is already a
+release, hold the next one until the work settles and ship the fixes together,
+unless one of them is breaking people right now. On a quiet day a single fix
+can go out on its own straight away.
+
+The mechanics are one step, a `vMAJOR.MINOR.PATCH` tag on a green `main`:
+
+```bash
+git tag -a v0.1.32 -m "Agent Inbox 0.1.32
+
+<what changed for the user>"
+git push origin v0.1.32
+```
+
+Then verify what was published rather than the green check: the release has
+its DMG, and `appcast.xml` on `main` lists the new version with a build number
+higher than the last.
+
 ## Conventions
 
 - Feature branches off `main`, PRs into `main`. This repo has no `develop`.
+- A user-visible fix or a significant feature gets a version tag in the same
+  session. See "When to tag a release".
 - Every user-visible change updates `README.md` in the same PR. See above.
 - No AI attribution in commits.
 - The senders must stay POSIX-ish bash: they run on Linux dev boxes, not only macOS.
