@@ -259,6 +259,15 @@ docs.ideaplaces.com/devops/macos-app-signing.
   turn that ended; the transcript is only the fallback for older versions and
   for the Notification hook. Never sleep-and-reread to fix this: the hook must
   not block a session.
+- **A view change lands red on `main` and stays red until the next real push.**
+  CI compares `docs/*.png` byte for byte against pictures rendered on the Mac,
+  and the images can only be regenerated there (`mac/screenshots.sh --write`).
+  A view change pushed from anywhere else fails that step; the release job
+  then renders and commits the new pictures, but a commit pushed with
+  `GITHUB_TOKEN` never triggers a workflow, so no green run follows and the
+  Discord failure post stays up. The order that works from a Linux box: push
+  the change (red), tag the release (pictures land), then push the next real
+  commit to `main`, which runs green on the fresh pictures and clears the post.
 - **Test the binary you think you are testing.** A `--configure` flag appeared to
   hang through several rounds of debugging because `/Applications` held the
   released build, which predated the flag.
