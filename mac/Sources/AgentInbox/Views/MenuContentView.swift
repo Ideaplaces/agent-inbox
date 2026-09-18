@@ -287,25 +287,25 @@ private struct ItemRow: View {
                         .note(.tertiary)
                 }
                 if let thread = item.thread {
-                    Text(thread)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                    labelled("Session") {
+                        Text(thread)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
                 }
                 if let subtitle = item.subtitle {
-                    Text(MarkdownText.attributed(subtitle))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(4)
-                        .fixedSize(horizontal: false, vertical: true)
+                    labelled(item.subtitleLabel) {
+                        Text(MarkdownText.attributed(subtitle))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 if let closing = item.closingWords {
-                    Text(MarkdownText.attributed(closing))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.primary.opacity(0.75))
-                        .lineLimit(4)
-                        .fixedSize(horizontal: false, vertical: true)
+                    labelled("Claude") { reduction(closing) }
                 }
                 if item.isShortTurn {
                     HStack(spacing: 4) {
@@ -317,13 +317,10 @@ private struct ItemRow: View {
                             .buttonStyle(.link)
                             .font(.system(size: 10))
                     }
+                    .padding(.leading, Self.labelWidth + Self.labelGap)
                 }
                 if let waiting = item.waitingOn {
-                    Text(MarkdownText.attributed(waiting))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.primary.opacity(0.75))
-                        .lineLimit(4)
-                        .fixedSize(horizontal: false, vertical: true)
+                    labelled("Claude") { reduction(waiting) }
                 }
             }
 
@@ -345,5 +342,49 @@ private struct ItemRow: View {
         .onHover { isHovered = $0 }
         .onTapGesture { model.store.markRead(item.id) }
         .help(item.cwd ?? "")
+    }
+
+    /// The width of the label column and the gap after it.
+    ///
+    /// A row carries up to three texts from three different sources: the name
+    /// of the conversation, what you typed, and what the agent answered. Told
+    /// apart by grey level alone they read as one paragraph in three shades,
+    /// and nothing on the row says which is which unless you already know. A
+    /// small label in front of each says it.
+    static let labelWidth: CGFloat = 46
+    static let labelGap: CGFloat = 8
+
+    private func labelled<Content: View>(
+        _ label: String, @ViewBuilder content: () -> Content
+    ) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Self.labelGap) {
+            Text(label.uppercased())
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(.tertiary)
+                .frame(width: Self.labelWidth, alignment: .trailing)
+            content()
+        }
+    }
+
+    /// The agent's opening sentence and its closing one, each on its own line
+    /// with the gap between them drawn as a gap. Joined into one paragraph the
+    /// " … " the sender puts between them looked like a stray in the quote.
+    private func reduction(_ text: String) -> some View {
+        let parts = InboxItem.sentences(of: text)
+        return VStack(alignment: .leading, spacing: 2) {
+            ForEach(Array(parts.enumerated()), id: \.offset) { index, part in
+                if index > 0 {
+                    Text("···")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                }
+                Text(MarkdownText.attributed(part))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.primary.opacity(0.75))
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 }

@@ -27,6 +27,11 @@ and no account required.
 
 ![The Agent Inbox menu, showing one finished session and one waiting on you](docs/menubar-inbox.png)
 
+Every row has the same shape, top to bottom: the repository and the machine, then
+**SESSION**, the conversation's name, **YOU**, the last thing you typed, and **CLAUDE**, how
+the agent's answer opened and how it closed, the two sentences on their own lines with a
+`···` between them for everything left out.
+
 ```
 senders (Claude Code hooks)        transport            surface (your Mac)
 ───────────────────────────   ──────────────────   ─────────────────────────

@@ -369,6 +369,30 @@ final class ItemThreadTests: XCTestCase {
         XCTAssertNil(item(summary: nil, ask: "push it", closing: "push it").closingWords)
         XCTAssertNil(item(summary: "s", ask: "a", closing: "").closingWords)
     }
+
+    /// The label in front of the subtitle names its source, and the subtitle
+    /// has three: a permission notice must not be labelled as something you
+    /// typed.
+    func testTheSubtitleLabelFollowsTheFallbackChain() {
+        XCTAssertEqual(item(summary: "NPS analysis", ask: "push it").subtitleLabel, "You")
+        XCTAssertEqual(item(summary: "NPS analysis", ask: nil).subtitleLabel, "Session")
+        XCTAssertEqual(
+            item(summary: nil, ask: nil, detail: "Claude needs your permission to use Bash").subtitleLabel,
+            "Claude")
+    }
+
+    /// The row draws the opening and the closing sentence apart, with the gap
+    /// between them shown as a gap rather than as three dots inside a quote.
+    func testTheReductionSplitsAtTheJoin() {
+        XCTAssertEqual(
+            InboxItem.sentences(of: "Pushed to main. … CI is green."),
+            ["Pushed to main.", "CI is green."])
+        XCTAssertEqual(InboxItem.sentences(of: "One sentence only."), ["One sentence only."])
+        XCTAssertEqual(
+            InboxItem.sentences(of: "Kept the ellipsis… inside a word. … Done."),
+            ["Kept the ellipsis… inside a word.", "Done."],
+            "only the sender's spaced join splits, not an ellipsis in the prose")
+    }
 }
 
 /// Every turn reports by default so a new install can see that it works. The

@@ -96,6 +96,16 @@ struct InboxItem: Codable, Identifiable, Equatable {
         ask ?? summary ?? detail
     }
 
+    /// Who the subtitle is from, for the label the row puts in front of it.
+    /// The chain above falls through three sources, and only the first is
+    /// something you typed: a subject with no ask is the conversation's name,
+    /// and a permission notice is the agent's side.
+    var subtitleLabel: String {
+        if ask != nil { return "You" }
+        if summary != nil, !(summary ?? "").isEmpty { return "Session" }
+        return "Claude"
+    }
+
     /// The agent's own words, shown under everything else.
     ///
     /// Kept out of `subtitle`'s fallback chain on purpose. The chain answers
@@ -119,6 +129,17 @@ struct InboxItem: Codable, Identifiable, Equatable {
     var closingWords: String? {
         guard let closing, !closing.isEmpty, closing != subtitle else { return nil }
         return closing
+    }
+
+    /// The sender joins the first and the last sentence of the agent's message
+    /// with " … ", and drawn as one paragraph the join disappears: the row read
+    /// as a single quote with three odd dots in it. The row draws the sentences
+    /// on their own lines with a visible gap marker between them, so this hands
+    /// it the pieces. A text with no join is one piece.
+    static func sentences(of reduction: String) -> [String] {
+        reduction.components(separatedBy: " … ")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
     }
 }
 
