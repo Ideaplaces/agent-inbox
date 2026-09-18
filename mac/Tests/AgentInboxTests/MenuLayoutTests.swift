@@ -34,4 +34,22 @@ final class MenuLayoutTests: XCTestCase {
             MenuContentView.listHeight(forContent: 4),
             MenuContentView.minimumListHeight)
     }
+
+    /// The window keeps the tallest height it reached, so the app shrinks it
+    /// itself: to the content, with the top edge where it was, since the top
+    /// is what hangs under the menubar.
+    func testTheWindowShrinksToItsContentFromTheTop() {
+        let tall = NSRect(x: 100, y: 200, width: 560, height: 600)
+        let fitted = WindowFitter.frame(fitting: 180, current: tall)
+        XCTAssertEqual(fitted, NSRect(x: 100, y: 620, width: 560, height: 180))
+    }
+
+    func testTheWindowIsLeftAloneWhenItAlreadyFits() {
+        let frame = NSRect(x: 100, y: 200, width: 560, height: 180)
+        XCTAssertNil(WindowFitter.frame(fitting: 180, current: frame))
+        XCTAssertNil(WindowFitter.frame(fitting: 179.5, current: frame), "sub-point noise is not a resize")
+        XCTAssertNil(WindowFitter.frame(fitting: 400, current: frame), "growth is SwiftUI's job")
+        XCTAssertNil(WindowFitter.frame(fitting: 0, current: frame), "nothing measured yet")
+    }
 }
+

@@ -9,11 +9,22 @@ private struct ContentHeightKey: PreferenceKey {
     }
 }
 
+/// Reports the measured height of the whole menu. Its own key: the row
+/// stack's preference above keeps bubbling past the view that reads it, so a
+/// reader at the root sharing that key would see the list, not the menu.
+private struct MenuHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 @MainActor
 struct MenuContentView: View {
     @Environment(AppModel.self) private var model
     @State private var contentHeight: CGFloat = 0
     @State private var settingsContentHeight: CGFloat = 0
+    @State private var menuHeight: CGFloat = 0
 
     /// One row is roughly 56pt, so this keeps a single item visible even
     /// before the first measurement lands.
@@ -72,6 +83,14 @@ struct MenuContentView: View {
             footer
         }
         .frame(width: 560)
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: MenuHeightKey.self, value: proxy.size.height)
+            }
+        )
+        .onPreferenceChange(MenuHeightKey.self) { menuHeight = $0 }
+        // The window this menu lives in never shrinks on its own; see the type.
+        .background(WindowFitter(contentHeight: menuHeight))
     }
 
     /// The settings page's own header: a way back, and a title saying where

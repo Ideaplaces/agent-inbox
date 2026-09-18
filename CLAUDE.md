@@ -62,7 +62,12 @@ docs.ideaplaces.com/devops/macos-app-signing.
   dead margin above and below, which reads as a padding bug and is not one. The
   same source built with the macOS 26 SDK goes 652 -> 157 across the same
   shrink. Check with `vtool -arch arm64 -show-build <binary> | grep sdk` before
-  chasing a layout problem that only appears on one Mac.
+  chasing a layout problem that only appears on one Mac. **That was half the
+  story.** 0.1.33, built on the current SDK, floated the same way as soon as
+  its taller rows made the shrink from a full list to one row bigger: the
+  window keeps the tallest height of the session on every SDK, the newer one
+  only hides it for small shrinks. `WindowFitter` now sets the window's frame
+  to the measured content, top edge anchored, whenever the content is shorter.
 - **A Focus profile silences notifications and nothing in the API says so.**
   `UNUserNotificationCenter` reported `authorized`, `alert: enabled`,
   `sound: enabled`; audio output was fine; and `"Pop"`, `"Pop.aiff"` and
