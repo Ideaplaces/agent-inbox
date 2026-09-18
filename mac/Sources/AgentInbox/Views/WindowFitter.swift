@@ -27,9 +27,14 @@ struct WindowFitter: NSViewRepresentable {
     func updateNSView(_ view: NSView, context: Context) {
         // Deferred: this runs inside a layout pass, and the window must not be
         // resized in the middle of one.
+        // Only a window that is on screen. A window already ordered out has
+        // nothing to fit, and touching it is not free: the screenshot suite
+        // hosts each capture in its own window and orders it out afterwards,
+        // and a late resize of an earlier one changed which window was key
+        // while the welcome page, with its text fields, was being drawn.
         let height = contentHeight
         DispatchQueue.main.async {
-            guard let window = view.window,
+            guard let window = view.window, window.isVisible,
                   let frame = Self.frame(fitting: height, current: window.frame)
             else { return }
             window.setFrame(frame, display: true, animate: false)
