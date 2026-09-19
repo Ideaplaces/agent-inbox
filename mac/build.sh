@@ -41,9 +41,30 @@ CONTENTS="$APP/Contents"
 
 echo "==> Building AgentInbox ($CONFIG, v$VERSION build $BUILD_NUMBER)"
 RPATH=(-Xlinker -rpath -Xlinker @executable_path/../Frameworks)
-swift build -c "$CONFIG" "${ARCH_ARGS[@]+"${ARCH_ARGS[@]}"}" "${RPATH[@]}"
+
+# Say which SDK this was built against, because the toolchain stopped saying.
+#
+# macOS decides how AppKit and SwiftUI behave for a binary from the SDK version
+# stamped into it, not from the machine it runs on. Stamped with an old SDK, a
+# MenuBarExtra window grows with its list and never shrinks again, so the menu
+# floats below the bar in dead space. SwiftPM under Xcode 26 stamped the real
+# SDK. Under Xcode 27 it stamps the deployment target instead, so 0.1.32 to
+# 0.1.34 all shipped as "sdk 14.0" from a machine with the 27.0 SDK, floated,
+# and a whole fix was written for a layout bug that was never in the layout.
+#
+# So the stamp is set here, explicitly, and checked below. MINOS has to match
+# `platforms:` in Package.swift.
+MINOS="14.0"
+SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version)"
+STAMP=(-Xlinker -platform_version -Xlinker macos -Xlinker "$MINOS" -Xlinker "$SDK_VERSION")
+
+swift build -c "$CONFIG" "${ARCH_ARGS[@]+"${ARCH_ARGS[@]}"}" "${RPATH[@]}" "${STAMP[@]}"
 BIN="$(swift build -c "$CONFIG" "${ARCH_ARGS[@]+"${ARCH_ARGS[@]}"}" --show-bin-path)/AgentInbox"
 [ -f "$BIN" ] || { echo "binary not found at $BIN" >&2; exit 1; }
+
+# Read it back from every slice. A flag the toolchain ignores next year must
+# fail the build here, not ship another floating menu.
+./check-sdk-stamp.sh "$BIN"
 
 echo "==> Assembling bundle"
 rm -rf "$APP"

@@ -62,6 +62,11 @@ else
   codesign --verify "$APP" && ok "signature verifies (ad-hoc, local build)" || fail "signature does not verify"
 fi
 
+# The SDK stamp decides how macOS treats the app's windows, and nothing else in
+# a build shows it. Three releases shipped stamped 14.0 and floated.
+./check-sdk-stamp.sh "$APP/Contents/MacOS/AgentInbox" \
+  && ok "every slice is stamped with a current SDK" || fail "stale SDK stamp"
+
 # The unpacked sender rides inside the bundle and becomes ~/.agent-inbox/bin/notify.sh.
 NOTIFY="$(find "$APP/Contents/Resources" -name notify.sh | head -1)"
 [ -n "$NOTIFY" ] && cmp -s "$NOTIFY" ../notify.sh \
