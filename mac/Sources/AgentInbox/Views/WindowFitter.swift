@@ -20,25 +20,13 @@ struct WindowFitter: NSViewRepresentable {
     /// The measured height of the whole menu.
     let contentHeight: CGFloat
 
-    func makeNSView(context: Context) -> NSView {
-        NSView(frame: .zero)
+    func makeNSView(context: Context) -> FittingView {
+        FittingView(frame: .zero)
     }
 
-    func updateNSView(_ view: NSView, context: Context) {
-        // Deferred: this runs inside a layout pass, and the window must not be
-        // resized in the middle of one.
-        // Only a window that is on screen. A window already ordered out has
-        // nothing to fit, and touching it is not free: the screenshot suite
-        // hosts each capture in its own window and orders it out afterwards,
-        // and a late resize of an earlier one changed which window was key
-        // while the welcome page, with its text fields, was being drawn.
-        let height = contentHeight
-        DispatchQueue.main.async {
-            guard let window = view.window, window.isVisible,
-                  let frame = Self.frame(fitting: height, current: window.frame)
-            else { return }
-            window.setFrame(frame, display: true, animate: false)
-        }
+    func updateNSView(_ view: FittingView, context: Context) {
+        view.contentHeight = contentHeight
+        view.fit()
     }
 
     /// The frame the window should take for content `height` tall, or nil
@@ -50,5 +38,57 @@ struct WindowFitter: NSViewRepresentable {
         return NSRect(
             x: current.minX, y: current.maxY - height,
             width: current.width, height: height)
+    }
+}
+
+
+/// The view that does the fitting, and knows when to.
+///
+/// The first version fitted only when the measured height changed, from
+/// inside `updateNSView`, and skipped a window that was not visible yet. Both
+/// are the common case, not the edge: the menu opens at the stale height of
+/// its last session with content that has not changed since, so nothing
+/// called it, and on a first open the measurement lands before the window is
+/// on screen, so the one call it got was the one it skipped. 0.1.34 shipped
+/// with that and floated exactly as before.
+///
+/// So this also fits whenever its window becomes key or changes occlusion,
+/// which is every time the menu opens, with whatever height was measured last.
+final class FittingView: NSView {
+    var contentHeight: CGFloat = 0
+    private var observers: [NSObjectProtocol] = []
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers = []
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard let window else { return }
+        for name in [NSWindow.didBecomeKeyNotification,
+                     NSWindow.didChangeOcclusionStateNotification] {
+            observers.append(NotificationCenter.default.addObserver(
+                forName: name, object: window, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.fit() }
+            })
+        }
+        fit()
+    }
+
+    /// Deferred, because this is reached from inside a layout pass and a
+    /// window must not be resized in the middle of one. Only a window on
+    /// screen: one already ordered out has nothing to fit, and a late resize
+    /// of it changes which window is key (the screenshot suite found that).
+    func fit() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let window = self.window, window.isVisible,
+                  let frame = WindowFitter.frame(
+                      fitting: self.contentHeight, current: window.frame)
+            else { return }
+            window.setFrame(frame, display: true, animate: false)
+        }
     }
 }

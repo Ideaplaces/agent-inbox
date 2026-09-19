@@ -62,12 +62,29 @@ docs.ideaplaces.com/devops/macos-app-signing.
   dead margin above and below, which reads as a padding bug and is not one. The
   same source built with the macOS 26 SDK goes 652 -> 157 across the same
   shrink. Check with `vtool -arch arm64 -show-build <binary> | grep sdk` before
-  chasing a layout problem that only appears on one Mac. **That was half the
-  story.** 0.1.33, built on the current SDK, floated the same way as soon as
-  its taller rows made the shrink from a full list to one row bigger: the
-  window keeps the tallest height of the session on every SDK, the newer one
-  only hides it for small shrinks. `WindowFitter` now sets the window's frame
-  to the measured content, top edge anchored, whenever the content is shorter.
+  chasing a layout problem that only appears on one Mac.
+- **The SDK stamp is set by `build.sh` and checked, because the toolchain
+  stopped setting it.** SwiftPM under Xcode 26 stamped the real SDK. Under
+  Xcode 27 it stamps the deployment target, so a machine with the 27.0 SDK
+  produced `sdk 14.0` binaries and 0.1.32, 0.1.33 and 0.1.34 all floated.
+  Nothing else showed it: builds passed, tests passed, screenshots matched.
+  The stamps tell the story on their own: 0.1.30 and 0.1.31 read `26.5`, the
+  next three read `14.0`, and Xcode was updated in between. `build.sh` passes
+  `-platform_version macos 14.0 <sdk>` to the linker and then runs
+  `mac/check-sdk-stamp.sh`, which fails unless every slice is stamped at least
+  as new as the machine's own macOS; `verify-dmg.sh` runs the same check on
+  the image, in CI and before a release publishes anything. If a future
+  toolchain ignores the flag, the build fails instead of shipping.
+- **A note in this file once blamed the layout for that, and was wrong.** It
+  said 0.1.33 floated "on the current SDK", which nobody had checked with
+  `vtool`; it was stamped 14.0. `WindowFitter` was written on that belief. It
+  stays as a second layer, but the version that shipped in 0.1.34 could not
+  have worked: it fitted only when the measured height changed and skipped a
+  window not yet on screen, and a menu reopening at a stale height is both.
+  `FittingView` now also fits whenever its window becomes key or changes
+  occlusion, and `WindowFitterTests` reproduces the stale-window case against
+  a real `NSWindow`. Before believing a claim about which SDK a build used,
+  read the stamp.
 - **A Focus profile silences notifications and nothing in the API says so.**
   `UNUserNotificationCenter` reported `authorized`, `alert: enabled`,
   `sound: enabled`; audio output was fine; and `"Pop"`, `"Pop.aiff"` and
