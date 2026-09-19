@@ -75,6 +75,14 @@ docs.ideaplaces.com/devops/macos-app-signing.
   as new as the machine's own macOS; `verify-dmg.sh` runs the same check on
   the image, in CI and before a release publishes anything. If a future
   toolchain ignores the flag, the build fails instead of shipping.
+- **The build Mac's toolchain is recorded, and a change turns CI red.** Xcode
+  updates itself on the runner and nothing in the repo changes when it does.
+  `mac/TOOLCHAIN` holds the Xcode version, its build and the macOS SDK;
+  `mac/check-toolchain.sh --check` runs first in CI and in the release, and a
+  mismatch fails with the procedure: build, package, `verify-dmg.sh`,
+  `screenshots.sh --check`, open the menu once with your eyes, then `--write`
+  and commit. Red here means "look", not "broken". The alternative was
+  learning about Xcode 27 from a user's screenshot three releases later.
 - **A note in this file once blamed the layout for that, and was wrong.** It
   said 0.1.33 floated "on the current SDK", which nobody had checked with
   `vtool`; it was stamped 14.0. `WindowFitter` was written on that belief. It

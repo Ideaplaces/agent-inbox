@@ -28,6 +28,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # This Mac updates Xcode on its own and the repo cannot see it happen.
+      # Red here means the toolchain moved, not that anything broke: the
+      # script says what to check before recording the new one. First, so the
+      # reason is the first thing in the log rather than a pixel diff below.
+      - name: Toolchain is the one we last looked at
+        working-directory: mac
+        run: ./check-toolchain.sh --check
+
       - name: Test
         working-directory: mac
         run: swift test

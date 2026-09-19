@@ -58,6 +58,12 @@ jobs:
           echo "$TAG" > mac/VERSION
           echo "building $TAG"
 
+      # A release from a toolchain nobody has looked at is how three floating
+      # menus shipped. Stop before building anything.
+      - name: Toolchain is the one we last looked at
+        working-directory: mac
+        run: ./check-toolchain.sh --check
+
       - name: Test
         working-directory: mac
         run: swift test
