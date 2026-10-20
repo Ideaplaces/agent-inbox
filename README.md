@@ -185,8 +185,8 @@ Three hooks produce these:
 
 | Hook event | Meaning | What you get |
 |------------|---------|--------------|
-| `UserPromptSubmit` | You handed work to the agent | Nothing. It just records a start time |
-| `Stop` | The agent finished its turn | **✅** with the duration and its closing words, the first and last sentence of what it said. Every turn by default; raise **Settings → General → Report turns longer than** to drop quick back-and-forth |
+| `UserPromptSubmit` | You handed work to the agent | Nothing. It just records a start time, and clears the session's row since you are in it. A background agent reporting back arrives through this hook too, and does neither |
+| `Stop` | The agent finished its turn | **✅** with the duration and its closing words, the first and last sentence of what it said. Every turn by default; raise **Settings → General → Report turns longer than** to drop quick back-and-forth. Held while background agents are still running, see below |
 | `Notification` | The agent needs permission, or has gone idle | **🖐️** with the reason and what it just asked. A permission prompt always reports. The idle timer fires 60s after *every* turn, so it only reports when the agent's closing line was a question; otherwise the ✅ already said it |
 
 **Every turn reports by default, however short.** The floor is 0 because saying "hello" to
@@ -195,6 +195,15 @@ the first thing anyone does after installing. If every turn is too chatty, raise
 **Settings → General → Report turns longer than** and turns under it are dropped. It
 applies to the machine you set it on: every machine keeps its own `~/.agent-inbox/config`,
 so a dev box you report from needs its own.
+
+**A turn that ends with agents still running in the background waits for them.** A
+session that sends agents off ends its turn at once, and wakes for another turn each time
+one reports back. There is nothing for you to do in between, so its ✅ is held until the
+last agent is back, and the duration then counts from when you asked. If one is still
+running after `AGENT_GRACE_MINUTES` (15 by default), the ✅ arrives anyway, opening with
+`Still running: 2 agents, the longest for 15m.`, because an agent that long may be stuck.
+Background shell commands do not count, since a dev server never reports back, and an
+agent launched more than three hours ago is taken to have died with its session.
 
 A turn under fifteen seconds says so on its own row, with a link into Settings, so the
 floor is discovered on exactly the row that made you wonder about it.
@@ -353,6 +362,7 @@ MIN_SECONDS=0                   # ignore turns shorter than this; 0 reports ever
 WATCH_MODE=all                  # or "tagged": report only tagged conversations
 WATCH_TAGS="#notify, #inbox, watch this"   # tags that turn a conversation on
 MUTE_TAG="#mute, stop notifying"           # tags that silence one
+AGENT_GRACE_MINUTES=15          # hold a ✅ while background agents run, up to this long
 HOST_LABEL="mac"                # machine name shown in messages
 NTFY_SERVER="https://ntfy.sh"   # a self-hosted ntfy instance
 ```
@@ -364,7 +374,8 @@ running as another user can read it, so the token lives in `~/.agent-inbox/ntfy-
 
 These are sender-side only, and the app writes them itself so the two can never disagree,
 including `MIN_SECONDS`, which **Settings → General → Report turns longer than** writes
-here. Sound, expiry, idle threshold and usage sharing are app-side and live in Settings. Usage sharing is deliberately not in this file: the senders never report anything,
+here. `AGENT_GRACE_MINUTES` is not in Settings yet, so on a Mac the app rewrites it away
+and the default applies; on a dev box, whose config you write yourself, it sticks. Sound, expiry, idle threshold and usage sharing are app-side and live in Settings. Usage sharing is deliberately not in this file: the senders never report anything,
 so there would be nothing for them to read.
 Notifications play **Pop** by default; **Settings → General → Sound** changes it, and
 `Silent` turns it off.
@@ -375,7 +386,8 @@ is filtering it. A Focus can silence an app while the notification API still rep
 as enabled, so nothing in the app can warn you about it.
 
 Runtime state also lives in `~/.agent-inbox/`: `bin/notify.sh` (unpacked from the app),
-the sender's transport config, `state/<session>.start` (turn timers), `presence` (seconds
+the sender's transport config, `state/<session>.start` (turn timers), `state/<session>.hold`
+(a ✅ held for running agents), `presence` (seconds
 clocked at the keyboard), and `items.json` (the inbox itself). The per-session files in
 `state/` are pruned after 7 days, on the next prompt you type, so the directory does not
 grow forever.

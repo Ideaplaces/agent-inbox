@@ -755,10 +755,12 @@ run prompt "$(prompt_payload 'anything at all')" >/dev/null
 # The first thing anyone does after installing is say "hello" to an agent to
 # see whether it works. With a 45 second floor that turn reported nothing and
 # the install looked broken. The floor is a setting now, and its default is 0.
+T_FIXED=1792500000
 new_home
 mkdir -p "$HOME/.agent-inbox/state"
-printf '%s' "$(( $(date +%s) - 3 ))" > "$HOME/.agent-inbox/state/$SID.start"
-out="$(run stop "$(printf '{"session_id":"%s","cwd":"/tmp/repo"}' "$SID")")"
+# Pinned: two reads of the wall clock a second boundary apart made it 0m 4s.
+printf '%s' "$(( T_FIXED - 3 ))" > "$HOME/.agent-inbox/state/$SID.start"
+out="$(AGENT_INBOX_NOW="$T_FIXED" run stop "$(printf '{"session_id":"%s","cwd":"/tmp/repo"}' "$SID")")"
 case "$out" in
   *"WOULD SEND"*) ok "with no config a three second turn still reports";;
   *) fail "with no config a three second turn still reports" "got: $out";;
@@ -772,7 +774,7 @@ esac
   || fail "and the contract carries the raw seconds" "got: $(last_line "$out")"
 
 printf 'MIN_SECONDS=45\n' > "$HOME/.agent-inbox/config"
-out="$(run stop "$(printf '{"session_id":"%s","cwd":"/tmp/repo"}' "$SID")")"
+out="$(AGENT_INBOX_NOW="$T_FIXED" run stop "$(printf '{"session_id":"%s","cwd":"/tmp/repo"}' "$SID")")"
 [ -z "$out" ] && ok "a floor set in config still drops a short turn" \
   || fail "a floor set in config still drops a short turn" "got: $out"
 
@@ -820,6 +822,167 @@ case "$(field "$out" .closing)" in
   "Promoted and verified."*) ok "with no message in the payload the transcript is still read";;
   *) fail "with no message in the payload the transcript is still read" "got: $(field "$out" .closing)";;
 esac
+
+# --- agents still running in the background hold the ✅ ---
+#
+# A session that sends agents off in the background ends its turn at once, and
+# every agent that finishes wakes it for another turn. Each of those turns put
+# up a row, and opening one found nothing to do. The ✅ waits until the last
+# agent reports back, unless one has been out for AGENT_GRACE_MINUTES.
+AT2="$(mktemp)"
+T0=1792500000                        # 2026-10-20T13:20:00Z, pinned
+iso() { date -u -d "@$1" +%Y-%m-%dT%H:%M:%S.123Z 2>/dev/null || date -u -r "$1" +%Y-%m-%dT%H:%M:%S.123Z; }
+launch() { # $1 = tool-use id, $2 = epoch, $3 = result text
+  jq -nc --arg id "$1" --arg t "$(iso "$2")" --arg r "$3" \
+    '{type:"user",timestamp:$t,message:{content:[{type:"tool_result",tool_use_id:$id,content:[{type:"text",text:$r}]}]}}'
+}
+reported() { # $1 = tool-use id: the agent's task-notification
+  jq -nc --arg id "$1" '{type:"user",timestamp:"2026-10-20T13:30:00.000Z",message:{content:("<task-notification>\n<task-id>a1</task-id>\n<tool-use-id>" + $id + "</tool-use-id>\n<status>completed</status>\n</task-notification>")}}'
+}
+said() { jq -nc --arg x "$1" '{type:"assistant",message:{content:[{type:"text",text:$x}]}}'; }
+agents_out() { NOW="${1:-$(( T0 + 60 ))}" TRANSCRIPT="$AT2" fn running_agents | cut -d' ' -f2 | tr '\n' ' ' | sed 's/ $//'; }
+stop_at() { # $1 = now
+  printf '{"session_id":"%s","cwd":"/tmp/repo","transcript_path":"%s"}' "$SID" "$AT2" \
+    | AGENT_INBOX_NOW="$1" AGENT_INBOX_DRY_RUN=1 bash "$NOTIFY" stop 2>/dev/null
+}
+
+{ launch toolu_a "$T0" "Async agent launched successfully. agentId: a1"
+  launch toolu_b "$T0" "Async agent launched successfully. agentId: a2"
+  launch toolu_s "$T0" '{"success":true,"message":"Resuming agent a3","resumedAgentId":"a3"}'
+  launch toolu_x "$T0" "Command running in background with ID: b1. Output is being written to /tmp/x"
+  reported toolu_b
+  launch toolu_r "$T0" "The transcript says <tool-use-id>toolu_a</tool-use-id> somewhere"
+  said "The reviews are running. I will pick up when they report."
+} > "$AT2"
+[ "$(agents_out)" = "toolu_a toolu_s" ] \
+  && ok "an agent is out from its launch until its task-notification, a resumed one too" \
+  || fail "an agent is out from its launch until its task-notification, a resumed one too" "got: [$(agents_out)]"
+[ -z "$(agents_out $(( T0 + 3 * 3600 + 1 )))" ] \
+  && ok "an agent out for more than three hours died with its session" \
+  || fail "an agent out for more than three hours died with its session" "got: [$(agents_out $(( T0 + 3 * 3600 + 1 )))]"
+# toolu_x is a background shell command, which never has to report back, and
+# toolu_r only quotes an id: neither is an agent, and the quote ends nothing.
+
+new_home
+out="$(stop_at $(( T0 + 120 )))"
+case "$out" in
+  "HOLD 780") ok "a turn that ends with agents out for two minutes holds until they reach fifteen";;
+  *) fail "a turn that ends with agents out for two minutes holds until they reach fifteen" "got: $out";;
+esac
+case "$(tail -n +2 "$HOME/.agent-inbox/state/$SID.hold")" in
+  *"\"session_id\":\"$SID\""*) ok "and keeps the payload it is holding";;
+  *) fail "and keeps the payload it is holding" "got: $(cat "$HOME/.agent-inbox/state/$SID.hold")";;
+esac
+
+out="$(stop_at $(( T0 + 16 * 60 )))"
+[ "$(field "$out" .closing)" = "Still running: 2 agents, the longest for 16m. The reviews are running. I will pick up when they report." ] \
+  && ok "past the grace period it reports, and says what is still running" \
+  || fail "past the grace period it reports, and says what is still running" "got: $(field "$out" .closing)"
+[ ! -f "$HOME/.agent-inbox/state/$SID.hold" ] \
+  && ok "and a stop that reports leaves nothing held" \
+  || fail "and a stop that reports leaves nothing held" "hold file still there"
+
+printf 'AGENT_GRACE_MINUTES=15m\n' > "$HOME/.agent-inbox/config"
+out="$(stop_at $(( T0 + 120 )); echo "rc=$?")"
+[ "$out" = "HOLD 780
+rc=0" ] && ok "a grace period that is not a number falls back to 15, and exits 0" \
+  || fail "a grace period that is not a number falls back to 15, and exits 0" "got: $out"
+printf 'AGENT_GRACE_MINUTES=1\n' > "$HOME/.agent-inbox/config"
+out="$(stop_at $(( T0 + 120 )))"
+case "$out" in *"WOULD SEND"*) ok "the grace period is a config value";;
+  *) fail "the grace period is a config value" "got: $out";; esac
+
+# Mid-turn, the report is not a user entry but a queued_command attachment.
+jq -nc '{type:"attachment",attachment:{type:"queued_command",prompt:"<task-notification>\n<tool-use-id>toolu_a</tool-use-id>\n</task-notification>"}}' >> "$AT2"
+[ "$(agents_out)" = "toolu_s" ] \
+  && ok "a report queued while the session was busy counts too" \
+  || fail "a report queued while the session was busy counts too" "got: [$(agents_out)]"
+{ reported toolu_s; said "Both reviews are back and clean."; } >> "$AT2"
+new_home
+out="$(stop_at $(( T0 + 300 )))"
+[ "$(field "$out" .closing)" = "Both reviews are back and clean." ] \
+  && ok "once the last agent reports back the turn reports as it always did" \
+  || fail "once the last agent reports back the turn reports as it always did" "got: $out"
+
+# A muted conversation holds nothing: there is nothing to come back for.
+new_home
+head -n 3 "$AT2" > "$AT2.young"; mv "$AT2.young" "$AT2"
+AGENT_INBOX_NOW=$T0 run prompt "$(prompt_payload 'quiet please #mute')" >/dev/null
+out="$(stop_at $(( T0 + 120 )))"
+[ -z "$out" ] && [ ! -f "$HOME/.agent-inbox/state/$SID.hold" ] \
+  && ok "a muted conversation is not held, it is silent" \
+  || fail "a muted conversation is not held, it is silent" "got: $out"
+
+# The held stop comes due: the recheck runs it again unless something newer
+# replaced the hold, and by then the agent is past the grace period.
+new_home
+mkdir -p "$HOME/.agent-inbox/state"
+H="$HOME/.agent-inbox/state/$SID.hold"
+printf 'n1\n{"session_id":"%s","cwd":"/tmp/repo","transcript_path":"%s"}\n' "$SID" "$AT2" > "$H"
+out="$(AGENT_INBOX_NOW=$(( T0 + 15 * 60 )) AGENT_INBOX_DRY_RUN=1 bash "$NOTIFY" recheck "$SID" n1 0 </dev/null 2>/dev/null)"
+case "$(field "$out" .closing)" in
+  "Still running: 3 agents, the longest for 15m."*) ok "a hold that comes due sends the held turn";;
+  *) fail "a hold that comes due sends the held turn" "got: $out";;
+esac
+[ ! -f "$H" ] && ok "and clears the hold" || fail "and clears the hold" "still there"
+printf 'n2\n{"session_id":"%s","cwd":"/tmp/repo","transcript_path":"%s"}\n' "$SID" "$AT2" > "$H"
+out="$(AGENT_INBOX_NOW=$(( T0 + 15 * 60 )) AGENT_INBOX_DRY_RUN=1 bash "$NOTIFY" recheck "$SID" n1 0 </dev/null 2>/dev/null)"
+[ -z "$out" ] && [ -f "$H" ] \
+  && ok "a recheck whose hold was replaced does nothing" \
+  || fail "a recheck whose hold was replaced does nothing" "got: $out"
+
+# You typed in the conversation, so the hold is yours: nothing comes back.
+run prompt "$(prompt_payload 'what is the status')" >/dev/null
+[ ! -f "$H" ] && ok "typing in the conversation drops its hold" \
+  || fail "typing in the conversation drops its hold" "still there"
+
+# --- an agent reporting back is not you typing ---
+#
+# Its task-notification arrives through the prompt hook. It used to clear the
+# session's row as if you had read it, restart the turn timer so the wrap-up
+# turn fell under MIN_SECONDS, and read the agent's report for tags.
+stub_curl_home
+mkdir -p "$HOME/.agent-inbox/state"
+: > "$HOME/.agent-inbox/state/$SID.notified"
+printf '%s' "$T0" > "$HOME/.agent-inbox/state/$SID.start"
+: > "$HOME/.agent-inbox/state/$SID.hold"
+send_for_real prompt "$(prompt_payload '<task-notification>
+<tool-use-id>toolu_a</tool-use-id> the agent says: stop notifying, #mute
+</task-notification>')"
+[ ! -s "$CURL_ARGS" ] && [ -f "$HOME/.agent-inbox/state/$SID.notified" ] \
+  && ok "a task-notification does not clear the row" \
+  || fail "a task-notification does not clear the row" "args: $(tr '\n' ' ' < "$CURL_ARGS")"
+[ "$(cat "$HOME/.agent-inbox/state/$SID.start")" = "$T0" ] \
+  && ok "nor restart the turn timer" \
+  || fail "nor restart the turn timer" "start: $(cat "$HOME/.agent-inbox/state/$SID.start")"
+[ ! -f "$HOME/.agent-inbox/state/$SID.watch" ] \
+  && ok "nor read the agent's words as a mute" \
+  || fail "nor read the agent's words as a mute" "watch: $(cat "$HOME/.agent-inbox/state/$SID.watch" 2>/dev/null)"
+# Its turn ends in a Stop that holds again if anything is still out; the old
+# hold's recheck would otherwise fire mid-turn and post a second row.
+[ ! -f "$HOME/.agent-inbox/state/$SID.hold" ] \
+  && ok "but it does drop the hold, so no recheck fires mid-turn" \
+  || fail "but it does drop the hold, so no recheck fires mid-turn" "hold still there"
+
+# The real spawn, not dry run: the hook must come back at once with its
+# stdout closed, or Claude Code waits on the pipe for the whole grace period,
+# and the recheck must post when it comes due.
+stub_curl_home
+printf 'AGENT_GRACE_MINUTES=1\nNTFY_SERVER="https://ntfy.example.com:8443"\n' > "$HOME/.agent-inbox/config"
+NOWS="$(date +%s)"
+{ launch toolu_live $(( NOWS - 58 )) "Async agent launched successfully."
+  said "Running the review in the background."; } > "$AT2"
+started="$(date +%s)"
+out="$(printf '{"session_id":"live","cwd":"/tmp/repo","transcript_path":"%s"}' "$AT2" \
+  | PATH="$STUB:$PATH" bash "$NOTIFY" stop; echo "rc=$?")"
+[ "$out" = "rc=0" ] && [ $(( $(date +%s) - started )) -le 3 ] && [ ! -s "$CURL_ARGS" ] \
+  && ok "a real hold returns at once, sends nothing, and leaves the pipe closed" \
+  || fail "a real hold returns at once, sends nothing, and leaves the pipe closed" "got: $out, args: $(cat "$CURL_ARGS")"
+i=0; while [ ! -s "$CURL_ARGS" ] && [ "$i" -lt 15 ]; do sleep 1; i=$((i + 1)); done
+grep -q "Still running: 1 agent, the longest for 1m." "$CURL_ARGS" \
+  && ok "and the detached recheck posts the held turn when it comes due" \
+  || fail "and the detached recheck posts the held turn when it comes due" "args: $(tr '\n' ' ' < "$CURL_ARGS")"
+rm -f "$AT2"
 
 echo
 echo "$PASS checks passed"

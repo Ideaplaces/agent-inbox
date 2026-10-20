@@ -36,7 +36,15 @@ WATCH_MODE=all
 # but "watch this one" is easy to say. Matching ignores case.
 WATCH_TAGS="#notify, #inbox, #watch, #agent-inbox, watch this, notify me"
 MUTE_TAG="#mute, stop notifying"
+# A turn that ends while agents it launched in the background are still
+# running has nothing for you to do: the session wakes on its own when they
+# report back. Its ✅ is held until the last one does, unless one of them has
+# been running this many minutes, which is long enough to be worth a look.
+AGENT_GRACE_MINUTES=15
 [ -f "$CONF_DIR/config" ] && . "$CONF_DIR/config"
+# Arithmetic on a hand-written "15m" would abort the hook, so anything that is
+# not a whole number of minutes falls back to the default.
+case "$AGENT_GRACE_MINUTES" in ''|*[!0-9]*) AGENT_GRACE_MINUTES=15 ;; esac
 
 # The exact title a control event carries. A real event's title is
 # "<symbol> <repo> @ <host>", so nothing legitimate can collide with it.
@@ -296,6 +304,76 @@ agent_asked_a_question() {
   esac
 }
 
+# --- Agents still running in the background ---
+#
+# A session that sends agents off in the background ends its turn at once
+# ("the reviews are running, I'll pick up when they report"), and every agent
+# that finishes wakes it for another turn. Each of those turns fired a Stop,
+# so a busy session put up a row per agent, and opening it found nothing to
+# do. What matters is whether anything is still out.
+#
+# The transcript says. A background launch is a tool result that begins
+# "Async agent launched" (the Agent tool) or reports "Resuming agent" (a
+# SendMessage that wakes one up), and its end is a <task-notification> naming
+# the same tool-use id. That arrives as a user entry when the session was
+# idle, and as a queued_command attachment when it was mid-turn; reading only
+# the first left half of all agents looking out forever. Background shell
+# commands are left out on purpose: a dev server never reports back, and it
+# would hold every turn of the session for the whole grace period.
+#
+# Read at Stop, which fires before the turn's last message is written (see
+# last_assistant_text). That late part is the closing reply only: a launch's
+# tool result is written when the tool returns, and the model still has to
+# stream an answer after it, so a launch in the turn that just ended is in the
+# file by now. Bounded read, like everything here: a launch further back than
+# the tail is treated as gone, which errs towards reporting. So is one older
+# than three hours. An agent dies with its session and never reports, and a
+# resumed conversation would otherwise say an agent had been running for days.
+running_agents() { # stdout = "<launch epoch> <tool-use id>" per agent still out
+  [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ] || return 0
+  tail -n 4000 "$TRANSCRIPT" | jq -Rrs --argjson since "$(( ${NOW:-$(date +%s)} - 3 * 3600 ))" '
+    def text: if type == "array" then (map(select(type == "object") | .text // "") | join("\n"))
+              else tostring end;
+    [split("\n")[] | fromjson?] as $all
+    | [$all[] | select(.type == "user")] as $u
+    | [$all[] | if .type == "user" then (.message.content | text)
+                elif .attachment.type? == "queued_command" then (.attachment.prompt | text)
+                else empty end
+       | select(test("^\\s*<task-notification>"))
+       | capture("<tool-use-id>(?<id>[^<]+)</tool-use-id>").id] as $done
+    | $u[] | . as $e | .message.content | arrays | .[]
+    | select(type == "object" and .type == "tool_result")
+    | select(.content | text | test("^\\s*(Async agent launched|\\{\"success\":true,\"message\":\"Resuming agent)"))
+    | select(.tool_use_id as $i | $done | index($i) | not)
+    | ($e.timestamp | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601) as $at
+    | select($at >= $since)
+    | "\($at) \(.tool_use_id)"
+  ' 2>/dev/null
+}
+
+# Hold this session's ✅ and come back when the oldest agent reaches the grace
+# period. Nothing else would: a session whose agents never return fires no
+# more hooks. The hold file carries a nonce on its first line and the payload
+# after it; any later prompt or stop replaces or removes it, and the waiting
+# process checks the nonce before it sends, so only the newest hold can fire.
+hold_until() { # $1 = epoch to recheck at
+  local nonce="$NOW.$$" hold="$STATE_DIR/$SESSION_ID.hold" delay=$(( $1 - NOW ))
+  [ "$delay" -gt 0 ] || delay=1
+  printf '%s\n%s\n' "$nonce" "$INPUT" > "$hold"
+  [ -n "${AGENT_INBOX_DRY_RUN:-}" ] && { printf 'HOLD %s\n' "$delay"; return 0; }
+  # Detached, with every descriptor closed, or Claude Code waits on the pipe,
+  # and in a session of its own, so nothing that ends the hook's process group
+  # takes it along. macOS has no setsid command; its perl has the call.
+  local me="${BASH_SOURCE[0]}"
+  if command -v setsid >/dev/null 2>&1; then
+    setsid nohup bash "$me" recheck "$SESSION_ID" "$nonce" "$delay" </dev/null >/dev/null 2>&1 &
+  elif command -v perl >/dev/null 2>&1; then
+    perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' bash "$me" recheck "$SESSION_ID" "$nonce" "$delay" </dev/null >/dev/null 2>&1 &
+  else
+    nohup bash "$me" recheck "$SESSION_ID" "$nonce" "$delay" </dev/null >/dev/null 2>&1 &
+  fi
+}
+
 # Tell the inbox to do something, rather than showing up in it.
 #
 # Control events ride the same topic as everything else and are told apart by an
@@ -398,6 +476,26 @@ contract_line() { # $1 = finished | needsYou
 # here and not at the top.
 [ -n "${AGENT_INBOX_SOURCE_ONLY:-}" ] && return 0 2>/dev/null
 
+# --- A held ✅ coming due ---
+#
+# Not a hook: hold_until starts this, detached, and it sleeps until the oldest
+# agent reaches the grace period. If nothing has replaced the hold since, the
+# held stop runs again with the payload it was holding. By then an agent still
+# out is past the grace period, so the stop reports it rather than holding.
+if [ "$KIND" = "recheck" ]; then
+  HOLD="$STATE_DIR/$2.hold"
+  sleep "$4"
+  # Read once: a prompt removing the hold between two reads would hand stop an
+  # empty payload.
+  HELD="$(cat "$HOLD" 2>/dev/null)"
+  [ "${HELD%%$'\n'*}" = "$3" ] || exit 0
+  PAYLOAD="${HELD#*$'\n'}"
+  [ -n "$PAYLOAD" ] && [ "$PAYLOAD" != "$HELD" ] || exit 0
+  rm -f "$HOLD"
+  printf '%s' "$PAYLOAD" | AGENT_INBOX_RECHECK=1 bash "${BASH_SOURCE[0]}" stop
+  exit 0
+fi
+
 # --- The event ---
 #
 # The hook payload arrives on stdin. Everything the functions read as a global
@@ -417,8 +515,26 @@ WATCH_FILE="$STATE_DIR/${SESSION_ID}.watch"
 case "$KIND" in
   prompt)
     # Record when the user handed work to the agent; used to skip quick turns.
+    PROMPT="$(printf '%s' "$INPUT" | jq -r '.prompt // empty')"
+    # A background agent reporting back arrives through this same hook, as a
+    # prompt that begins <task-notification>. Nobody typed it, so it is not
+    # proof the row was seen and must not clear it, and an agent's report that
+    # happens to say "stop notifying" is not a mute. Nor does it restart the
+    # turn timer: the wait that matters is since you asked, and the turn that
+    # wraps up the last agent is often a few seconds long, short enough for
+    # MIN_SECONDS to drop the one report the held turns were waiting for.
+    # The hold goes, though: a Stop always follows this turn and holds again
+    # if anything is still out, while the old hold's recheck could otherwise
+    # fire mid-turn and post a second row.
+    case "${PROMPT#"${PROMPT%%[![:space:]]*}"}" in
+      "<task-notification>"*)
+        [ -n "$SESSION_ID" ] && rm -f "${STATE_DIR:?}/$SESSION_ID.hold"
+        exit 0 ;;
+    esac
     [ -n "$SESSION_ID" ] && printf '%s' "$NOW" > "$STATE_DIR/$SESSION_ID.start"
-    record_tags "$(printf '%s' "$INPUT" | jq -r '.prompt // empty')"
+    # You typed, so whatever was held for this session is yours now.
+    [ -n "$SESSION_ID" ] && rm -f "$STATE_DIR/$SESSION_ID.hold"
+    record_tags "$PROMPT"
     # Nothing else ever removes a session's .start or .watch, so the directory
     # only grows: 47 files on one Mac, 218 on a dev box. A prompt is the cheap
     # place to sweep, once per message you type. A week is long past any
@@ -454,10 +570,28 @@ case "$KIND" in
       [ "$ELAPSED" -lt "$MIN_SECONDS" ] && exit 0
       DURATION="$(( ELAPSED / 60 ))m $(( ELAPSED % 60 ))s"
     fi
+    # This stop supersedes any earlier hold. A recheck already removed its own.
+    [ -n "$SESSION_ID" ] && rm -f "$STATE_DIR/$SESSION_ID.hold"
+    # Agents still out: hold, or say how long they have been at it.
+    STILL=""
+    RUNNING="$(running_agents)"
+    if [ -n "$RUNNING" ] && [ -n "$SESSION_ID" ] && should_report; then
+      OLDEST="$(printf '%s\n' "$RUNNING" | sort -n | head -n 1 | cut -d' ' -f1)"
+      COUNT="$(printf '%s\n' "$RUNNING" | wc -l | tr -d ' ')"
+      GRACE=$(( AGENT_GRACE_MINUTES * 60 ))
+      if [ $(( NOW - OLDEST )) -lt "$GRACE" ] && [ -z "${AGENT_INBOX_RECHECK:-}" ]; then
+        hold_until $(( OLDEST + GRACE ))
+        exit 0
+      fi
+      AGENTS="agents"; [ "$COUNT" = "1" ] && AGENTS="agent"
+      STILL="Still running: $COUNT $AGENTS, the longest for $(( (NOW - OLDEST) / 60 ))m."
+    fi
     # How the turn ended, which is what tells two long sessions apart. Falls
     # back to the head of the last message when there is no prose to reduce,
     # so a turn that ended in a code block still says something.
     CLOSING="$(closing_words)"
+    # The agents go first: past the grace period they are why this row exists.
+    [ -n "$STILL" ] && CLOSING="$STILL${CLOSING:+ $CLOSING}"
     DETAIL=""
     [ -z "$CLOSING" ] && DETAIL="$(last_assistant_text 600)"
     WAITING_ON=""

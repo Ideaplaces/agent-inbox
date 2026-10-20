@@ -289,6 +289,19 @@ docs.ideaplaces.com/devops/macos-app-signing.
   turn that ended; the transcript is only the fallback for older versions and
   for the Notification hook. Never sleep-and-reread to fix this: the hook must
   not block a session.
+- **A background agent's report is a prompt, and a turn.** Its
+  `<task-notification>` fires `UserPromptSubmit` and then `Stop`, so before
+  0.1.36 every agent that finished cleared the session's row as if the user had
+  read it and put up a fresh ✅: a session running five agents produced five
+  rows, none with anything to do. The prompt branch now ignores those, and the
+  stop branch holds while `running_agents` finds launches with no report. The
+  report reaches the transcript in two shapes, a user entry when the session
+  was idle and a `queued_command` attachment when it was mid-turn; matching
+  only the first left half of all agents looking out forever. The hold is the
+  one thing in the sender that outlives the hook: a detached `recheck`
+  process, guarded by a nonce in `state/<id>.hold`. It does not read the
+  transcript late: the launch's tool result is written before the model
+  streams its closing reply, so it is already there when `Stop` fires.
 - **A view change lands red on `main` and stays red until the next real push.**
   CI compares `docs/*.png` byte for byte against pictures rendered on the Mac,
   and the images can only be regenerated there (`mac/screenshots.sh --write`).
