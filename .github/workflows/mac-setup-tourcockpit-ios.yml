@@ -1,0 +1,77 @@
+# One-off setup on Chip's MacBook for TourCockpit's iOS simulator run, started by
+# hand (Chip, 2026-11-06: the Mac runner exists, "why not? What's stopping it?").
+#
+# This MacBook's runner is registered to this repository only, and the iOS
+# simulator nightly lives in Ideaplaces/ideaplaces-tour-platform. This job, run
+# on the MacBook, reports what the Mac has for it (Xcode, the simulators,
+# Postgres, Safari's automation) and, when asked, installs Postgres and
+# registers a second runner for that repository, label `ios-sim`, in its own
+# folder as a login service.
+#
+# Nothing secret passes through this public repository: the registration token
+# is minted on the Mac by its own `gh` login and never printed. Only Chip and
+# Luca can start it (workflow_dispatch needs write access).
+name: Mac setup for TourCockpit iOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      register:
+        description: "Install Postgres and register the tour-platform runner (otherwise only report)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: mac-setup-tourcockpit-ios
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    runs-on: [self-hosted, macOS, ARM64, chip-macbook]
+    timeout-minutes: 30
+    steps:
+      - name: What the Mac has
+        shell: bash
+        run: |
+          set -u
+          echo "macOS $(sw_vers -productVersion) on $(uname -m)"
+          xcodebuild -version 2>&1 | head -2 || echo "no xcodebuild"
+          echo "--- iOS simulators"
+          xcrun simctl list devices available 2>&1 | grep -E "^-- iOS|iPhone|iPad" | head -30 || echo "no simctl"
+          echo "--- Homebrew"
+          command -v brew && brew --version | head -1 || echo "no brew"
+          if brew list postgresql@16 >/dev/null 2>&1; then echo "postgresql@16 installed"; else echo "postgresql@16 missing"; fi
+          echo "--- node"
+          command -v node && node --version || echo "no node on the runner's PATH"
+          echo "--- gh"
+          if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then echo "gh signed in"; else echo "gh not signed in for the runner"; fi
+          echo "--- safaridriver"
+          command -v safaridriver || echo "no safaridriver"
+          echo "--- runner for tour-platform"
+          if [ -f "$HOME/actions-runner-tourcockpit/.runner" ]; then echo "already registered"; else echo "not registered"; fi
+
+      - name: Postgres
+        if: inputs.register
+        shell: bash
+        run: brew list postgresql@16 >/dev/null 2>&1 || brew install postgresql@16
+
+      - name: Register the tour-platform runner (ios-sim)
+        if: inputs.register
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="$HOME/actions-runner-tourcockpit"
+          if [ -f "$dir/.runner" ]; then echo "already registered"; exit 0; fi
+          mkdir -p "$dir"
+          cd "$dir"
+          v=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | sed -n 's/.*"tag_name": "v\([^"]*\)".*/\1/p')
+          curl -sL -o runner.tgz "https://github.com/actions/runner/releases/download/v$v/actions-runner-osx-arm64-$v.tar.gz"
+          tar xzf runner.tgz
+          rm runner.tgz
+          token=$(gh api -X POST repos/Ideaplaces/ideaplaces-tour-platform/actions/runners/registration-token --jq .token)
+          echo "::add-mask::$token"
+          ./config.sh --unattended --url https://github.com/Ideaplaces/ideaplaces-tour-platform --token "$token" \
+            --name chip-macbook-tourcockpit --labels macOS,ARM64,xcode26,ios-sim --work _work
+          ./svc.sh install
+          ./svc.sh start
+          echo "registered and started"
