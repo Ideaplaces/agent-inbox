@@ -8,9 +8,12 @@
 # registers a second runner for that repository, label `ios-sim`, in its own
 # folder as a login service.
 #
-# Nothing secret passes through this public repository: the registration token
-# is minted on the Mac by its own `gh` login and never printed. Only Chip and
-# Luca can start it (workflow_dispatch needs write access).
+# Nothing secret is printed in this public repository: the runner's own process
+# has no `gh` login (measured on the first run), so the one-hour registration
+# token comes from an encrypted repository secret, TOURCOCKPIT_RUNNER_TOKEN, set
+# just before the run and deleted after it. Secrets are masked in logs and never
+# given to a fork's workflow. Only Chip and Luca can start it
+# (workflow_dispatch needs write access).
 name: Mac setup for TourCockpit iOS
 
 on:
@@ -58,6 +61,8 @@ jobs:
       - name: Register the tour-platform runner (ios-sim)
         if: inputs.register
         shell: bash
+        env:
+          TOKEN: ${{ secrets.TOURCOCKPIT_RUNNER_TOKEN }}
         run: |
           set -euo pipefail
           dir="$HOME/actions-runner-tourcockpit"
@@ -68,9 +73,8 @@ jobs:
           curl -sL -o runner.tgz "https://github.com/actions/runner/releases/download/v$v/actions-runner-osx-arm64-$v.tar.gz"
           tar xzf runner.tgz
           rm runner.tgz
-          token=$(gh api -X POST repos/Ideaplaces/ideaplaces-tour-platform/actions/runners/registration-token --jq .token)
-          echo "::add-mask::$token"
-          ./config.sh --unattended --url https://github.com/Ideaplaces/ideaplaces-tour-platform --token "$token" \
+          [ -n "${TOKEN:-}" ] || { echo "TOURCOCKPIT_RUNNER_TOKEN is not set"; exit 1; }
+          ./config.sh --unattended --url https://github.com/Ideaplaces/ideaplaces-tour-platform --token "$TOKEN" \
             --name chip-macbook-tourcockpit --labels macOS,ARM64,xcode26,ios-sim --work _work
           ./svc.sh install
           ./svc.sh start
